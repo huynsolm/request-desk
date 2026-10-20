@@ -49,7 +49,7 @@ npm run build
 
 ## 3. 이어서 할 일 (순서)
 
-1. **4차 재검수 결과 받기** — [codex-rereview-4-prompt.md](codex-rereview-4-prompt.md) 를 Codex 에 붙여 넣어 요청. 결과의 지적 사항은 코드·실행으로 재현해 확인한 뒤 수정하고, 수정 전 코드에서 회귀 테스트가 실패하는지도 확인한다(지금까지의 방식, [reviews/](reviews/README.md) 참조).
+1. **4차 재검수 결과 받기** — [codex-rereview-4-prompt.md](codex-rereview-4-prompt.md) 를 Codex 에 붙여 넣어 요청. 토큰을 아끼려면 범위를 이번 변경분으로 좁힌 [codex-rereview-4-lite-prompt.md](codex-rereview-4-lite-prompt.md) 를 쓴다. 결과의 지적 사항은 코드·실행으로 재현해 확인한 뒤 수정하고, 수정 전 코드에서 회귀 테스트가 실패하는지도 확인한다(지금까지의 방식, [reviews/](reviews/README.md) 참조).
 2. **검수 통과 후, 사용자 승인을 받아** `stage-1-review` 를 `main` 에 병합.
 3. **2단계: 모의 분석 제공자** (사용자 지시 §7)
    - 분석 호출을 별도 인터페이스(`AnalysisProvider`)로 분리, 실제 AI 와 모의 분석을 교체 가능하게
