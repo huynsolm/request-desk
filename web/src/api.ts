@@ -69,7 +69,7 @@ export const api = {
   reopen: (id: string) => call<RequestDetail>('POST', `/api/requests/${id}/reopen`),
   addItem: (rid: string, b: { kind: ItemKind; content: string; quote?: string | null }) =>
     call<AnalysisItem>('POST', `/api/requests/${rid}/items`, b),
-  updateItem: (id: string, b: { version: number; content?: string }) => call<AnalysisItem>('PATCH', `/api/items/${id}`, b),
+  updateItem: (id: string, b: { version: number; content?: string; quote?: string | null }) => call<AnalysisItem>('PATCH', `/api/items/${id}`, b),
   deleteItem: (id: string, version: number) => call<{ ok: true }>('DELETE', `/api/items/${id}`, { version }),
   restoreItem: (id: string) => call<AnalysisItem>('POST', `/api/items/${id}/restore`),
   reviewItem: (id: string, version: number) => call<AnalysisItem>('POST', `/api/items/${id}/review`, { version }),

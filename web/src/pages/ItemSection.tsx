@@ -221,7 +221,64 @@ function ItemRow({ item, ...p }: { item: AnalysisItem } & SectionProps) {
         <span className="marker u" aria-hidden="true" />
       )}
       <div className="item-main">
-        {editing && editing.mode === 'edit' ? (
+        {editing && editing.mode === 'edit' && isReq ? (
+          <div className="inline-form">
+            <textarea
+              autoFocus
+              className="edit-area"
+              aria-label="내용을 입력해 주세요"
+              rows={2}
+              value={editing.text}
+              onChange={(e) => p.onFormChange({ text: e.target.value, error: undefined })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  p.onFormCommit();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  p.onFormCancel();
+                }
+              }}
+            />
+            <label className="label" htmlFor={`quote-${item.id}`}>
+              원문 근거 <span className="hint">· 원문에 있는 문장을 그대로 적어 주세요{item.origin === 'manual' ? ' (비워도 돼요)' : ''}</span>
+            </label>
+            <textarea
+              id={`quote-${item.id}`}
+              className="edit-area"
+              aria-label="원문 근거"
+              rows={2}
+              value={editing.text2}
+              placeholder="예: 가능한 날짜를 보고"
+              onChange={(e) => p.onFormChange({ text2: e.target.value, error: undefined })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  p.onFormCommit();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  p.onFormCancel();
+                }
+              }}
+            />
+            {editing.error && (
+              <div className="field-error" role="alert">
+                {editing.error}
+              </div>
+            )}
+            <div className="row">
+              <button type="button" className="btn btn-sm btn-apply" disabled={editing.busy} onClick={p.onFormCommit}>
+                적용
+              </button>
+              <button type="button" className="btn btn-sm" onClick={p.onFormCancel}>
+                취소
+              </button>
+              <span className="hint">Enter 적용 · Esc 취소</span>
+            </div>
+          </div>
+        ) : editing && editing.mode === 'edit' ? (
           <InlineText {...p} form={editing} placeholder="내용을 입력해 주세요" />
         ) : (
           <div className={`item-text${isReq ? ' req' : ''}`}>{item.content}</div>

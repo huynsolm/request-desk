@@ -17,6 +17,10 @@ const DB_MESSAGES: Record<string, [number, string]> = {
   task_requires_requirement: [422, '명시된 요구사항으로만 작업을 만들 수 있어요.'],
   task_source_mismatch: [422, '작업과 요구사항 연결이 맞지 않아요.'],
   request_delete_not_allowed: [409, '요청은 삭제할 수 없어요.'],
+  resolution_required: [422, '질문과 미확정 사항에는 해결 상태가 있어야 해요.'],
+  task_link_immutable: [409, '작업과 요구사항의 연결은 바꿀 수 없어요.'],
+  immutable_original: [409, '원문 개정판은 바꿀 수 없어요.'],
+  last_criterion: [422, '작업에는 완료 조건이 하나 이상 있어야 해요.'],
 };
 
 /** SQLite 오류를 사용자에게 보여줄 AppError 로 바꾼다. */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError } from '../api.ts';
 import { notifyChanged } from '../App.tsx';
@@ -171,51 +171,108 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
   const [titleError, setTitleError] = useState<string | null>(null);
   const [newCrit, setNewCrit] = useState('');
   const [critError, setCritError] = useState<string | null>(null);
+  const [editCrit, setEditCrit] = useState<{ id: string; text: string; error?: string; busy?: boolean } | null>(null);
 
-  const apply = (d: TaskDetail, keepText = false) => {
-    setT(d);
-    if (!keepText) {
-      setTitle(d.title);
-      setDesc(d.description);
-    }
-  };
+  // 재시도(다시 저장)가 "실패 당시의 값"이 아니라 "지금의 값"을 쓰도록, 항상 최신 상태를 ref 로 읽는다.
+  const tRef = useRef<TaskDetail | null>(null);
+  tRef.current = t;
+  const titleRef = useRef('');
+  titleRef.current = title;
+  const descRef = useRef('');
+  descRef.current = desc;
+  const editCritRef = useRef(editCrit);
+  editCritRef.current = editCrit;
+
+  /** 서버 응답을 화면에 반영한다. 입력 중인 제목·설명 초안은 덮어쓰지 않는다. */
+  const applyKeepDrafts = (d: TaskDetail) => setT(d);
 
   useEffect(() => {
     api
       .getTask(taskId)
-      .then((d) => apply(d))
+      .then((d) => {
+        setT(d);
+        setTitle(d.title);
+        setDesc(d.description);
+      })
       .catch((e: ApiError) => setErr(e.code === 'not_found' ? '작업을 찾을 수 없어요.' : '작업을 불러오지 못했어요.'));
   }, [taskId]);
 
-  /** 작업 변경 저장. 실패하면 입력값은 그대로 두고 "다시 저장"으로 재시도한다. */
-  const save = async (key: string, patch: { title?: string; description?: string; status?: TaskStatus }) => {
-    if (!t) return;
-    const r = await saver.track(
-      key,
-      () => api.updateTask(t.id, { version: t.version, ...patch }),
-      () => {
-        onChanged();
-        notifyChanged();
-      },
-    );
-    if (r.ok) apply(r.value, true);
-    else if (!r.error.retryable) {
-      toast(r.error.message);
+  /** 충돌(다른 곳에서 먼저 바뀜)이면 최신 작업 정보만 가져오고, 사용자가 쓴 초안은 그대로 둔다. */
+  const afterFailure = async (e: ApiError) => {
+    if (e.retryable) return;
+    toast(e.code === 'version_conflict' ? '다른 곳에서 먼저 바뀐 내용이에요. 입력한 내용은 그대로 두었어요. 확인한 뒤 다시 저장해 주세요.' : e.message);
+    if (e.code === 'version_conflict') {
       const fresh = await api.getTask(taskId).catch(() => null);
-      if (fresh) apply(fresh);
+      if (fresh) applyKeepDrafts(fresh);
     }
   };
 
-  const crit = async (fn: () => Promise<TaskDetail>, key: string) => {
-    const r = await saver.track(key, fn);
-    if (r.ok) {
-      apply(r.value, true);
+  /**
+   * 작업 변경 저장. build 는 실행하는 시점에 호출되어 그때의 최신 초안으로 패치를 만든다(다시 저장 때도 마찬가지).
+   * 성공 응답은 최초 실행과 재시도 모두 같은 경로로 반영되므로 version 이 항상 최신으로 유지된다.
+   */
+  const save = async (key: string, build: () => { title?: string; description?: string; status?: TaskStatus } | null) => {
+    const r = await saver.track(key, async () => {
+      const cur = tRef.current;
+      const patch = build();
+      if (!cur || !patch) return null;
+      const d = await api.updateTask(cur.id, { version: cur.version, ...patch });
+      applyKeepDrafts(d);
       onChanged();
-      return true;
-    }
-    if (!r.error.retryable) setCritError(r.error.message);
-    return false;
+      notifyChanged();
+      return d;
+    });
+    if (!r.ok) await afterFailure(r.error);
   };
+
+  /** 완료 조건 변경. 성공하면 최초·재시도 모두 서버 응답을 반영한다. */
+  const crit = async (key: string, fn: () => Promise<TaskDetail>) => {
+    const r = await saver.track(key, async () => {
+      const d = await fn();
+      applyKeepDrafts(d);
+      onChanged();
+      return d;
+    });
+    if (!r.ok) {
+      if (!r.error.retryable) setCritError(r.error.message);
+      return false;
+    }
+    return true;
+  };
+
+  /** 기존 완료 조건 문구 수정(같은 ID 유지). 실패해도 입력창과 입력값을 남기고, 다시 저장은 현재 입력을 보낸다. */
+  const commitCritEdit = async () => {
+    const cur = editCritRef.current;
+    if (!cur || cur.busy) return;
+    const msg = checkCriterion(cur.text);
+    if (msg) return setEditCrit({ ...cur, error: msg });
+    const submitted = cur.text;
+    setEditCrit({ ...cur, busy: true, error: undefined });
+    const r = await saver.track(
+      `crit-edit:${cur.id}`,
+      async () => {
+        const d = await api.updateCriterion(cur.id, { text: cur.text.trim() });
+        applyKeepDrafts(d);
+        onChanged();
+        return d;
+      },
+      () => {
+        const now = editCritRef.current;
+        if (now && now.id === cur.id && now.text === submitted) setEditCrit(null);
+        else if (now) setEditCrit({ ...now, busy: false });
+      },
+      async () => {
+        if (editCritRef.current) await commitCritEditRef.current();
+        else saver.dismiss(`crit-edit:${cur.id}`);
+      },
+    );
+    if (!r.ok) {
+      const now = editCritRef.current;
+      if (now) setEditCrit({ ...now, busy: false, error: r.error.retryable ? '저장하지 못했어요. 입력한 내용은 그대로 남아 있어요.' : r.error.message });
+    }
+  };
+  const commitCritEditRef = useRef(commitCritEdit);
+  commitCritEditRef.current = commitCritEdit;
 
   if (err) {
     return (
@@ -245,6 +302,7 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
   }
 
   const done = t.criteria.filter((c) => c.done).length;
+  const onlyOne = t.criteria.length <= 1;
   return (
     <aside className="tpanel" aria-label="작업 상세">
       <div className="tpanel-head">
@@ -285,7 +343,7 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
             }}
             onBlur={() => {
               if (!title.trim()) return setTitleError('작업 제목을 입력해 주세요.');
-              if (title.trim() !== t.title) void save('title', { title: title.trim() });
+              if (title.trim() !== t.title) void save('title', () => (titleRef.current.trim() ? { title: titleRef.current.trim() } : null));
             }}
             aria-invalid={!!titleError}
           />
@@ -298,7 +356,7 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
           </span>
           <div className="seg" role="group" aria-labelledby="tp-status-label">
             {STATUSES.map((s) => (
-              <button key={s} type="button" aria-pressed={t.status === s} onClick={() => t.status !== s && void save('status', { status: s })}>
+              <button key={s} type="button" aria-pressed={t.status === s} onClick={() => t.status !== s && void save('status', () => ({ status: s }))}>
                 {TASK_LABEL[s]}
               </button>
             ))}
@@ -332,7 +390,7 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
             onBlur={() => {
-              if (desc !== t.description) void save('desc', { description: desc });
+              if (desc !== t.description) void save('desc', () => ({ description: descRef.current }));
             }}
           />
         </div>
@@ -347,25 +405,84 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
           <ul>
             {t.criteria.map((c) => (
               <li key={c.id} className="crit">
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={c.done}
-                  aria-label={`완료 조건 확인: ${c.text}`}
-                  className="cb"
-                  onClick={() => void crit(() => api.updateCriterion(c.id, { done: !c.done }), `crit:${c.id}`)}
-                >
-                  {c.done ? '✓' : ''}
-                </button>
-                <span className={`tx${c.done ? ' done' : ''}`}>{c.text}</span>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-text btn-danger-text"
-                  aria-label={`완료 조건 삭제: ${c.text}`}
-                  onClick={() => void crit(() => api.deleteCriterion(c.id), `critdel:${c.id}`)}
-                >
-                  삭제
-                </button>
+                {editCrit && editCrit.id === c.id ? (
+                  <div className="inline-form" style={{ flex: 1 }}>
+                    <textarea
+                      autoFocus
+                      className="edit-area"
+                      aria-label="완료 조건 문구"
+                      rows={2}
+                      value={editCrit.text}
+                      onChange={(e) => setEditCrit({ ...editCrit, text: e.target.value, error: undefined })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                          void commitCritEdit();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          saver.dismiss(`crit-edit:${c.id}`);
+                          setEditCrit(null);
+                        }
+                      }}
+                    />
+                    {editCrit.error && (
+                      <div className="field-error" role="alert">
+                        {editCrit.error}
+                      </div>
+                    )}
+                    <div className="row">
+                      <button type="button" className="btn btn-sm btn-apply" disabled={editCrit.busy} onClick={() => void commitCritEdit()}>
+                        적용
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => {
+                          saver.dismiss(`crit-edit:${c.id}`);
+                          setEditCrit(null);
+                        }}
+                      >
+                        취소
+                      </button>
+                      <span className="hint">Enter 적용 · Esc 취소</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={c.done}
+                      aria-label={`완료 조건 확인: ${c.text}`}
+                      className="cb"
+                      onClick={() => void crit(`crit:${c.id}`, () => api.updateCriterion(c.id, { done: !c.done }))}
+                    >
+                      {c.done ? '✓' : ''}
+                    </button>
+                    <span className={`tx${c.done ? ' done' : ''}`}>{c.text}</span>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-text"
+                      aria-label={`완료 조건 수정: ${c.text}`}
+                      onClick={() => {
+                        saver.dismiss(`crit-edit:${editCrit?.id ?? ''}`);
+                        setEditCrit({ id: c.id, text: c.text });
+                      }}
+                    >
+                      수정
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-text btn-danger-text"
+                      aria-label={`완료 조건 삭제: ${c.text}`}
+                      disabled={onlyOne}
+                      title={onlyOne ? '작업에는 완료 조건이 하나 이상 있어야 해요.' : undefined}
+                      onClick={() => void crit(`critdel:${c.id}`, () => api.deleteCriterion(c.id))}
+                    >
+                      삭제
+                    </button>
+                  </>
+                )}
               </li>
             ))}
           </ul>
@@ -378,7 +495,7 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
               const msg = checkCriterion(text);
               if (msg) return setCritError(msg);
               setCritError(null);
-              if (await crit(() => api.addCriterion(t.id, text), 'critadd')) setNewCrit('');
+              if (await crit('critadd', () => api.addCriterion(t.id, text))) setNewCrit('');
             }}
           >
             <input

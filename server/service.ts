@@ -3,6 +3,8 @@ import type { Db } from './db/open.ts';
 import { tx } from './db/open.ts';
 import { AppError, translateDbError } from './errors.ts';
 import {
+  MAX,
+  tooLong,
   checkCriterion,
   checkCustomer,
   checkItemContent,
@@ -31,6 +33,19 @@ import type {
 type Row = Record<string, any>;
 
 const now = () => new Date().toISOString();
+
+/** 문자열 필드만 허용한다. 없으면(undefined/null) 빈 문자열, 문자열이 아니면 422. */
+function str(v: unknown, field: string, label: string): string {
+  if (v === undefined || v === null) return '';
+  if (typeof v !== 'string') {
+    throw new AppError(422, 'validation', `${label} 형식이 올바르지 않아요.`, { [field]: `${label} 형식이 올바르지 않아요.` });
+  }
+  return v;
+}
+/** 값이 있을 때만 문자열을 요구하는 선택 필드 */
+function optStr(v: unknown, field: string, label: string): string | undefined {
+  return v === undefined ? undefined : str(v, field, label);
+}
 const id = () => randomUUID();
 
 /** 트랜잭션 + DB 오류 번역. 서비스 쓰기 함수는 모두 이 안에서 실행한다. */
@@ -70,9 +85,12 @@ export interface CreateRequestInput {
 }
 
 export function createRequest(db: Db, input: CreateRequestInput): RequestDetail {
-  const title = String(input.title ?? '').trim();
-  const customerName = String(input.customerName ?? '').trim();
-  const originalText = normalizeNewlines(String(input.originalText ?? ''));
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new AppError(422, 'validation', '요청 형식이 올바르지 않아요.');
+  }
+  const title = str(input.title, 'title', '요청 제목').trim();
+  const customerName = str(input.customerName, 'customerName', '고객명').trim();
+  const originalText = normalizeNewlines(str(input.originalText, 'originalText', '요청 원문'));
   const fieldErrors: Record<string, string> = {};
   const e1 = checkTitle(title);
   if (e1) fieldErrors.title = e1;
@@ -259,17 +277,17 @@ export function updateRequest(db: Db, requestId: string, input: UpdateRequestInp
   const fieldErrors: Record<string, string> = {};
   const next: { title?: string; customerName?: string; originalText?: string } = {};
   if (input.title !== undefined) {
-    next.title = String(input.title).trim();
+    next.title = str(input.title, 'title', '요청 제목').trim();
     const e = checkTitle(next.title);
     if (e) fieldErrors.title = e;
   }
   if (input.customerName !== undefined) {
-    next.customerName = String(input.customerName).trim();
+    next.customerName = str(input.customerName, 'customerName', '고객명').trim();
     const e = checkCustomer(next.customerName);
     if (e) fieldErrors.customerName = e;
   }
   if (input.originalText !== undefined) {
-    next.originalText = normalizeNewlines(String(input.originalText));
+    next.originalText = normalizeNewlines(str(input.originalText, 'originalText', '요청 원문'));
     const e = checkOriginal(next.originalText);
     if (e) fieldErrors.originalText = e;
   }
@@ -389,10 +407,11 @@ export function addItem(
   input: { kind: ItemKind; content: string; quote?: string | null; note?: string | null },
 ): AnalysisItem {
   if (!KINDS.includes(input.kind)) throw new AppError(422, 'validation', '항목 종류가 올바르지 않아요.');
-  const content = String(input.content ?? '').trim();
+  const content = str(input.content, 'content', '내용').trim();
   const err = checkItemContent(content);
   if (err) throw new AppError(422, 'validation', err, { content: err });
-  const quote = input.kind === 'requirement' ? normalizeQuote(input.quote) : null;
+  const quote = input.kind === 'requirement' ? normalizeQuote(optStr(input.quote, 'quote', '근거 문장') ?? null) : null;
+  const noteText = input.note === undefined || input.note === null ? null : str(input.note, 'note', '메모').trim() || null;
   const iid = write(db, () => {
     const req = getRequestRow(db, requestId);
     assertReviewing(req);
@@ -406,7 +425,7 @@ export function addItem(
       kind: input.kind,
       content,
       quote,
-      note: input.note ? String(input.note).trim() || null : null,
+      note: noteText,
       origin: 'manual',
       reviewState: 'reviewed',
     });
@@ -437,11 +456,17 @@ export function updateItem(
 ): AnalysisItem {
   write(db, () => {
     const { item, req } = lockItem(db, itemId, input.version);
-    const content = input.content !== undefined ? String(input.content).trim() : item.content;
+    const content = input.content !== undefined ? str(input.content, 'content', '내용').trim() : item.content;
     const err = checkItemContent(content);
     if (err) throw new AppError(422, 'validation', err, { content: err });
-    const quote = input.quote !== undefined ? (item.kind === 'requirement' ? normalizeQuote(input.quote) : null) : item.quote;
-    const note = input.note !== undefined ? (input.note ? String(input.note).trim() || null : null) : item.note;
+    const quote =
+      input.quote !== undefined
+        ? item.kind === 'requirement'
+          ? normalizeQuote(input.quote === null ? null : str(input.quote, 'quote', '근거 문장'))
+          : null
+        : item.quote;
+    const note =
+      input.note !== undefined ? (input.note === null ? null : str(input.note, 'note', '메모').trim() || null) : item.note;
     if (item.kind === 'requirement' && item.origin !== 'manual' && !quote) {
       throw new AppError(422, 'quote_required', 'AI·모의 제안 요구사항은 원문 근거를 지울 수 없어요.', {
         quote: '원문 근거가 필요해요.',
@@ -523,7 +548,7 @@ export function resolveItem(
       return;
     }
     const label = item.kind === 'question' ? '고객 답변' : '결정 내용';
-    const text = String(input.text ?? '').trim();
+    const text = str(input.text, 'text', label).trim();
     const err = checkNote(text, label);
     if (err) throw new AppError(422, 'validation', err, { text: err });
     db.prepare(
@@ -540,15 +565,15 @@ export function convertToRequirement(
   itemId: string,
   input: { version: number; content: string; basis: string; quote?: string | null },
 ): AnalysisItem {
-  const content = String(input.content ?? '').trim();
-  const basis = String(input.basis ?? '').trim();
+  const content = str(input.content, 'content', '요구사항 내용').trim();
+  const basis = str(input.basis, 'basis', '전환 근거').trim();
   const fieldErrors: Record<string, string> = {};
   const e1 = checkItemContent(content);
   if (e1) fieldErrors.content = e1;
   const e2 = checkNote(basis, '전환 근거');
   if (e2) fieldErrors.basis = e2;
   if (Object.keys(fieldErrors).length) throw new AppError(422, 'validation', '입력한 내용을 확인해 주세요.', fieldErrors);
-  const quote = normalizeQuote(input.quote);
+  const quote = normalizeQuote(optStr(input.quote, 'quote', '근거 문장') ?? null);
   const newId = write(db, () => {
     const { item, req } = lockItem(db, itemId, input.version);
     if (item.kind === 'requirement') throw new AppError(422, 'validation', '이미 요구사항이에요.');
@@ -687,9 +712,21 @@ function getTaskRow(db: Db, taskId: string): Row {
  * (서버 로직 + tasks.confirmation_item_id / source_item_id UNIQUE 로 이중 방지)
  */
 export function createTasks(db: Db, requestId: string, input: CreateTasksInput): CreateTasksResult {
-  if (!input || !Array.isArray(input.tasks) || input.tasks.length === 0) {
+  if (!input || typeof input !== 'object' || !Array.isArray(input.tasks) || input.tasks.length === 0) {
     throw new AppError(422, 'validation', '작업으로 만들 요구사항을 하나 이상 선택해 주세요.');
   }
+  // 요소의 형태부터 확인한다(형태가 틀리면 500 이 아니라 422).
+  input.tasks.forEach((t, idx) => {
+    const ok =
+      t &&
+      typeof t === 'object' &&
+      typeof t.confirmationItemId === 'string' &&
+      typeof t.title === 'string' &&
+      (t.description === undefined || typeof t.description === 'string') &&
+      Array.isArray(t.criteria) &&
+      t.criteria.every((c) => typeof c === 'string');
+    if (!ok) throw new AppError(422, 'validation', '작업 내용의 형식이 올바르지 않아요.', { [`tasks.${idx}`]: '작업 내용의 형식이 올바르지 않아요.' });
+  });
   // 입력 검증(모두 통과해야 하나도 만들지 않고 실패한다)
   const errors: Record<string, string> = {};
   const seen = new Set<string>();
@@ -697,6 +734,8 @@ export function createTasks(db: Db, requestId: string, input: CreateTasksInput):
     if (seen.has(t.confirmationItemId)) errors[`tasks.${idx}`] = '같은 요구사항이 두 번 들어 있어요.';
     seen.add(t.confirmationItemId);
     if (!String(t.title ?? '').trim()) errors[`tasks.${idx}.title`] = '작업 제목을 입력해 주세요.';
+    else if (t.title.trim().length > MAX.taskTitle) errors[`tasks.${idx}.title`] = tooLong('작업 제목', MAX.taskTitle);
+    if ((t.description ?? '').length > MAX.description) errors[`tasks.${idx}.description`] = tooLong('설명', MAX.description);
     const criteria = (t.criteria ?? []).map((c) => String(c).trim()).filter(Boolean);
     if (criteria.length === 0) errors[`tasks.${idx}.criteria`] = '완료 조건을 한 줄 이상 적어 주세요.';
     for (const c of criteria) {
@@ -785,11 +824,15 @@ export function updateTask(
   write(db, () => {
     const t = getTaskRow(db, taskId);
     if (t.version !== input.version) throw conflict();
-    const title = input.title !== undefined ? String(input.title).trim() : t.title;
+    const title = input.title !== undefined ? str(input.title, 'title', '작업 제목').trim() : t.title;
     if (!title) throw new AppError(422, 'validation', '작업 제목을 입력해 주세요.', { title: '작업 제목을 입력해 주세요.' });
+    if (title.length > MAX.taskTitle) throw new AppError(422, 'validation', tooLong('작업 제목', MAX.taskTitle), { title: tooLong('작업 제목', MAX.taskTitle) });
     const status = input.status ?? t.status;
     if (!['todo', 'doing', 'done'].includes(status)) throw new AppError(422, 'validation', '작업 상태가 올바르지 않아요.');
-    const description = input.description !== undefined ? String(input.description) : t.description;
+    const description = input.description !== undefined ? str(input.description, 'description', '설명') : t.description;
+    if (description.length > MAX.description) {
+      throw new AppError(422, 'validation', tooLong('설명', MAX.description), { description: tooLong('설명', MAX.description) });
+    }
     db.prepare(
       'UPDATE tasks SET title = ?, description = ?, status = ?, version = version + 1, updated_at = ? WHERE id = ?',
     ).run(title, description, status, now(), taskId);
@@ -798,7 +841,7 @@ export function updateTask(
 }
 
 export function addCriterion(db: Db, taskId: string, text: string): TaskDetail {
-  const t = String(text ?? '').trim();
+  const t = str(text, 'text', '완료 조건').trim();
   const err = checkCriterion(t);
   if (err) throw new AppError(422, 'validation', err, { text: err });
   write(db, () => {
@@ -818,7 +861,7 @@ export function updateCriterion(db: Db, criterionId: string, input: { done?: boo
     taskId = c.task_id;
     let text = c.text as string;
     if (input.text !== undefined) {
-      text = String(input.text).trim();
+      text = str(input.text, 'text', '완료 조건').trim();
       const err = checkCriterion(text);
       if (err) throw new AppError(422, 'validation', err, { text: err });
     }
@@ -834,6 +877,10 @@ export function deleteCriterion(db: Db, criterionId: string): TaskDetail {
     const c = db.prepare('SELECT * FROM task_criteria WHERE id = ?').get(criterionId) as Row | undefined;
     if (!c) throw notFound('완료 조건');
     taskId = c.task_id;
+    const n = (db.prepare('SELECT count(*) AS n FROM task_criteria WHERE task_id = ?').get(taskId) as Row).n as number;
+    if (n <= 1) {
+      throw new AppError(422, 'last_criterion', '작업에는 완료 조건이 하나 이상 있어야 해요. 문구를 수정하거나 새 조건을 추가한 뒤 지워 주세요.');
+    }
     db.prepare('DELETE FROM task_criteria WHERE id = ?').run(criterionId);
   });
   return getTaskDetail(db, taskId);

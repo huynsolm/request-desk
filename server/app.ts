@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type { Db } from './db/open.ts';
 import { AppError, translateDbError } from './errors.ts';
 import * as svc from './service.ts';
@@ -14,7 +15,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173,h
 async function body(c: { req: { json: () => Promise<unknown> } }): Promise<Record<string, any>> {
   try {
     const v = await c.req.json();
-    return v && typeof v === 'object' ? (v as Record<string, any>) : {};
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, any>) : {};
   } catch {
     return {};
   }
@@ -27,6 +28,15 @@ function requireVersion(b: Record<string, any>): number {
 
 export function createApp(db: Db): Hono {
   const app = new Hono();
+
+  // 비정상적으로 큰 본문은 읽기 전에 거부한다(필드별 길이 상한은 service 에서 별도로 검사).
+  app.use(
+    '/api/*',
+    bodyLimit({
+      maxSize: 1024 * 1024,
+      onError: (c) => c.json({ code: 'payload_too_large', message: '보낸 내용이 너무 커요.' }, 413),
+    }),
+  );
 
   // 로그인이 없는 로컬 서버라서, 사용자가 연 다른 웹사이트가 이 API 를 호출하지 못하게 막는다.
   app.use('/api/*', async (c, next) => {

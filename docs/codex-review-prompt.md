@@ -1,4 +1,6 @@
-# Codex 검수 요청 프롬프트 (1단계)
+# Codex 검수 요청 프롬프트 (1단계 · 최초)
+
+> 재검수는 [codex-rereview-prompt.md](codex-rereview-prompt.md)를 쓰세요. 이 문서는 최초 검수용입니다.
 
 아래 블록을 그대로 Codex 에 붙여 넣으세요. 작업 폴더는 이 저장소 루트(`request-desk`)입니다.
 

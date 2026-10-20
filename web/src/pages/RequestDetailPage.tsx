@@ -37,6 +37,7 @@ export function RequestDetailPage() {
   const [reopenOpen, setReopenOpen] = useState(false);
   const formRef = useRef<FormState | null>(null);
   formRef.current = form;
+  const commitFormRef = useRef<() => Promise<void>>(async () => {});
 
   const reload = useCallback(async () => {
     try {
@@ -91,11 +92,21 @@ export function RequestDetailPage() {
   }, [reload]);
 
   /** 서버에 변경을 보내고 성공하면 화면을 새로고침한다. 실패 사유가 검증 오류면 메시지를 돌려준다. */
-  async function mutate<T>(key: string, fn: () => Promise<T>, onOk?: () => void | Promise<void>): Promise<{ ok: true; value: T } | { ok: false; error: ApiError }> {
-    const r = await saver.track(key, fn, async () => {
-      await afterOk();
-      await onOk?.();
-    });
+  async function mutate<T>(
+    key: string,
+    fn: () => Promise<T>,
+    onOk?: () => void | Promise<void>,
+    retry?: () => Promise<unknown>,
+  ): Promise<{ ok: true; value: T } | { ok: false; error: ApiError }> {
+    const r = await saver.track(
+      key,
+      fn,
+      async () => {
+        await afterOk();
+        await onOk?.();
+      },
+      retry,
+    );
     if (!r.ok && !r.error.retryable) {
       if (r.error.code === 'version_conflict' || r.error.code === 'locked_confirmed') await reload();
     }
@@ -122,73 +133,112 @@ export function RequestDetailPage() {
     if (!r.ok && !r.error.retryable) showError(r.error);
   }
 
-  const startNew = (kind: ItemKind) => setForm({ mode: 'new', kind, text: '', text2: '' });
-  const startEdit = (i: AnalysisItem) => setForm({ mode: 'edit', itemId: i.id, kind: i.kind, text: i.content, text2: '' });
-  const startResolve = (i: AnalysisItem) => setForm({ mode: 'resolve', itemId: i.id, kind: i.kind, text: i.resolutionText ?? '', text2: '' });
+  // 다른 입력창을 열거나 취소하면, 이전 입력창의 저장 실패 대기열은 버린다(과거 입력이 새 입력을 덮어쓰지 않도록).
+  const openForm = (f: FormState) => {
+    saver.dismiss('form');
+    setForm(f);
+  };
+  const startNew = (kind: ItemKind) => openForm({ mode: 'new', kind, text: '', text2: '' });
+  const startEdit = (i: AnalysisItem) =>
+    openForm({ mode: 'edit', itemId: i.id, kind: i.kind, text: i.content, text2: i.quote ?? '' });
+  const startResolve = (i: AnalysisItem) => openForm({ mode: 'resolve', itemId: i.id, kind: i.kind, text: i.resolutionText ?? '', text2: '' });
   const startConvert = (i: AnalysisItem) =>
-    setForm({
+    openForm({
       mode: 'convert',
       itemId: i.id,
       kind: i.kind,
       text: '',
       text2: `${i.kind === 'question' ? '고객 답변' : '결정'}: ${i.resolutionText ?? ''}`,
     });
-  const cancelForm = () => setForm(null);
+  const cancelForm = () => {
+    saver.dismiss('form');
+    setForm(null);
+  };
   const patchForm = (p: Partial<FormState>) => setForm((f) => (f ? { ...f, ...p } : f));
 
-  /** 항목 입력창의 "적용"/Enter. 실패해도 입력창과 입력값을 그대로 둔다. */
+  /**
+   * 항목 입력창의 "적용"/Enter. 항상 "지금 입력창에 있는" 내용을 저장한다.
+   * - 실패해도 입력창과 입력값은 그대로 두고, "다시 저장"은 실패 당시 값이 아니라 현재 입력을 다시 보낸다.
+   * - 저장이 끝났을 때 입력창 내용이 제출한 내용과 같을 때만 닫는다(저장 중에 더 입력했다면 닫지 않는다).
+   */
   async function commitForm() {
     const f = formRef.current;
     if (!f || f.busy) return;
     const text = f.text.trim();
     if (f.mode === 'edit' || f.mode === 'new') {
       // README: 빈 값으로 적용하면 취소와 같다.
-      if (!text) return setForm(null);
+      if (!text) return cancelForm();
       const err = checkItemContent(text);
       if (err) return patchForm({ error: err });
     }
+    const submitted = { mode: f.mode, itemId: f.itemId, kind: f.kind, text: f.text, text2: f.text2 };
+    const unchanged = () => {
+      const cur = formRef.current;
+      return !!cur && cur.mode === submitted.mode && cur.itemId === submitted.itemId && cur.kind === submitted.kind && cur.text === submitted.text && cur.text2 === submitted.text2;
+    };
+    const finish = () => {
+      if (unchanged()) setForm(null);
+      else patchForm({ busy: false });
+    };
+    const retry = async () => {
+      if (!formRef.current) saver.dismiss('form');
+      else await commitFormRef.current();
+    };
+    const failMsg = (e: ApiError) =>
+      e.retryable ? '저장하지 못했어요. 입력한 내용은 그대로 남아 있어요.' : (e.fieldErrors?.quote ?? e.fieldErrors?.content ?? e.message);
+
     if (f.mode === 'edit') {
       const item = items.find((i) => i.id === f.itemId);
-      if (!item) return setForm(null);
-      if (text === item.content) return setForm(null);
-      patchForm({ busy: true });
-      const r = await mutate(`edit:${item.id}`, () => api.updateItem(item.id, { version: item.version, content: text }), () => setForm(null));
-      if (!r.ok) patchForm({ busy: false, error: r.error.retryable ? '저장하지 못했어요. 입력한 내용은 그대로 남아 있어요.' : r.error.message });
+      if (!item) return cancelForm();
+      const quote = f.text2.trim() || null;
+      const quoteChanged = item.kind === 'requirement' && quote !== (item.quote ?? null);
+      if (text === item.content && !quoteChanged) return cancelForm();
+      patchForm({ busy: true, error: undefined });
+      const r = await mutate(
+        'form',
+        () => api.updateItem(item.id, { version: item.version, content: text, ...(quoteChanged ? { quote } : {}) }),
+        finish,
+        retry,
+      );
+      if (!r.ok) patchForm({ busy: false, error: failMsg(r.error) });
     } else if (f.mode === 'new') {
-      patchForm({ busy: true });
-      const r = await mutate(`new:${f.kind}`, () => api.addItem(id, { kind: f.kind, content: text }), () => setForm(null));
-      if (!r.ok) patchForm({ busy: false, error: r.error.retryable ? '저장하지 못했어요. 입력한 내용은 그대로 남아 있어요.' : r.error.message });
+      patchForm({ busy: true, error: undefined });
+      const r = await mutate('form', () => api.addItem(id, { kind: f.kind, content: text }), finish, retry);
+      if (!r.ok) patchForm({ busy: false, error: failMsg(r.error) });
     } else if (f.mode === 'resolve') {
       const item = items.find((i) => i.id === f.itemId);
-      if (!item) return setForm(null);
+      if (!item) return cancelForm();
       const label = item.kind === 'question' ? '고객 답변' : '결정 내용';
       const err = checkNote(text, label);
       if (err) return patchForm({ error: err });
-      patchForm({ busy: true });
+      patchForm({ busy: true, error: undefined });
       const r = await mutate(
-        `resolve:${item.id}`,
+        'form',
         () => api.resolveItem(item.id, { version: item.version, resolution: item.kind === 'question' ? 'answered' : 'decided', text }),
-        () => setForm(null),
+        finish,
+        retry,
       );
-      if (!r.ok) patchForm({ busy: false, error: r.error.retryable ? '저장하지 못했어요. 입력한 내용은 그대로 남아 있어요.' : r.error.message });
+      if (!r.ok) patchForm({ busy: false, error: failMsg(r.error) });
     } else if (f.mode === 'convert') {
       const item = items.find((i) => i.id === f.itemId);
-      if (!item) return setForm(null);
+      if (!item) return cancelForm();
       const e1 = checkItemContent(text);
       const e2 = checkNote(f.text2, '전환 근거');
       if (e1 || e2) return patchForm({ error: e1 ?? e2 ?? undefined });
-      patchForm({ busy: true });
+      patchForm({ busy: true, error: undefined });
       const r = await mutate(
-        `convert:${item.id}`,
+        'form',
         () => api.convertItem(item.id, { version: item.version, content: text, basis: f.text2.trim() }),
         () => {
-          setForm(null);
+          finish();
           toast('요구사항으로 반영했어요. 검토한 뒤 확정할 수 있어요.');
         },
+        retry,
       );
-      if (!r.ok) patchForm({ busy: false, error: r.error.retryable ? '저장하지 못했어요. 입력한 내용은 그대로 남아 있어요.' : r.error.message });
+      if (!r.ok) patchForm({ busy: false, error: failMsg(r.error) });
     }
   }
+  commitFormRef.current = commitForm;
 
   async function reopen() {
     try {
