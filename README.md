@@ -11,7 +11,7 @@
 요구: Node 24 이상 (내장 `node:sqlite` 사용, "실험 기능" 경고가 한 번 뜰 수 있어요)
 
 ```bash
-npm install
+npm ci                    # 잠금 파일(package-lock.json) 기준으로 설치
 npm run db:reset          # DB 만들기 + 샘플 3건 (기본: 모닝 스튜디오 요청은 '접수' 상태)
 npm run dev               # API 서버(3001) + 웹(5173) 동시 실행 → http://localhost:5173
 ```

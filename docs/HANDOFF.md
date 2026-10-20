@@ -38,6 +38,7 @@ npm run build
 ```
 
 ### 알아둘 점
+- `npm ci` 중 `esbuild ... install-scripts` 경고가 나오는데 무시해도 됩니다(새로 clone 해서 설치·테스트·빌드·E2E 를 모두 통과함을 확인했습니다. 확인 커밋 `04f21c1`).
 - **DB 파일은 git 에 없습니다.** `data/app.db` 는 PC 마다 따로 생깁니다. 작업한 데이터는 옮겨지지 않으며, 샘플은 `npm run db:reset` 으로 다시 만듭니다. (옵션: `-- --morning-analysis` 첫 요청에 샘플 분석 포함, `-- --empty` 빈 DB)
 - **`npm run db:reset` 은 `data/app.db` 를 지우고 새로 만듭니다.** 소중한 데이터가 있는 DB 에서는 실행하지 마세요. 다른 파일에 쓰려면 `DB_PATH=data/other.db` 를 지정합니다.
 - 비밀키·`.env` 는 필요 없습니다(1단계). `.env.example` 만 있습니다. 3단계에서 서버 전용 키가 필요해지면 `.env` 에 넣고 **절대 커밋하지 않습니다.**
