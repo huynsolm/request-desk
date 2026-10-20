@@ -24,7 +24,12 @@ export function RequestDetailPage() {
   const { id = '' } = useParams();
   const nav = useNavigate();
   const toast = useToast();
-  const saver = useSaver();
+  const reloadRef = useRef<() => Promise<void>>(async () => {});
+  // 다시 시도로 해결되지 않는 오류는 최초 저장·다시 저장 어느 경로에서든 사용자에게 알린다.
+  const saver = useSaver((e) => {
+    toast(e.message);
+    if (e.code === 'version_conflict' || e.code === 'locked_confirmed') void reloadRef.current();
+  });
   const [d, setD] = useState<RequestDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [started, setStarted] = useState(false);
@@ -48,6 +53,8 @@ export function RequestDetailPage() {
       setLoadError((e as ApiError).code === 'not_found' ? 'not_found' : '요청을 불러오지 못했어요.');
     }
   }, [id]);
+
+  reloadRef.current = reload;
 
   useEffect(() => {
     setD(null);
@@ -98,39 +105,33 @@ export function RequestDetailPage() {
     onOk?: () => void | Promise<void>,
     retry?: () => Promise<unknown>,
   ): Promise<{ ok: true; value: T } | { ok: false; error: ApiError }> {
-    const r = await saver.track(
-      key,
-      fn,
-      async () => {
+    const r = await saver.track(key, fn, {
+      onOk: async () => {
         await afterOk();
         await onOk?.();
       },
       retry,
-    );
-    if (!r.ok && !r.error.retryable) {
+      inline: key === 'form', // 입력창 저장은 입력창 안에 오류를 보여준다
+    });
+    if (!r.ok && !r.error.retryable && key === 'form') {
       if (r.error.code === 'version_conflict' || r.error.code === 'locked_confirmed') await reload();
     }
     return r;
   }
 
-  const showError = (e: ApiError) => toast(e.retryable ? '저장하지 못했어요. 화면 위의 ‘다시 저장’으로 다시 시도할 수 있어요.' : e.message);
-
   // ───── 항목 동작 ─────
   async function review(item: AnalysisItem) {
-    const r = await mutate(`review:${item.id}`, () => api.reviewItem(item.id, item.version));
-    if (!r.ok && !r.error.retryable) showError(r.error);
+    await mutate(`review:${item.id}`, () => api.reviewItem(item.id, item.version));
   }
   async function remove(item: AnalysisItem) {
-    const r = await mutate(`delete:${item.id}`, () => api.deleteItem(item.id, item.version), () => {
+    await mutate(`delete:${item.id}`, () => api.deleteItem(item.id, item.version), () => {
       toast('항목을 삭제했어요.', '되돌리기', () => {
         void mutate(`restore:${item.id}`, () => api.restoreItem(item.id));
       });
     });
-    if (!r.ok && !r.error.retryable) showError(r.error);
   }
   async function unresolve(item: AnalysisItem) {
-    const r = await mutate(`resolve:${item.id}`, () => api.resolveItem(item.id, { version: item.version, resolution: 'open' }));
-    if (!r.ok && !r.error.retryable) showError(r.error);
+    await mutate(`resolve:${item.id}`, () => api.resolveItem(item.id, { version: item.version, resolution: 'open' }));
   }
 
   // 다른 입력창을 열거나 취소하면, 이전 입력창의 저장 실패 대기열은 버린다(과거 입력이 새 입력을 덮어쓰지 않도록).
@@ -446,6 +447,7 @@ export function RequestDetailPage() {
         <div className="save-banner" role="alert">
           <div>
             <strong>편집 내용을 저장하지 못했어요.</strong> 입력한 내용은 이 화면에 그대로 남아 있어요.
+            {saver.message && <div style={{ marginTop: 2 }}>{saver.message}</div>}
           </div>
           <button type="button" className="btn-retry" onClick={() => void saver.retry()}>
             다시 저장

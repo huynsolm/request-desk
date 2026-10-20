@@ -161,3 +161,84 @@ test('[E2E-F4] 원문이 바뀌어 무효가 된 근거 인용문을 화면에�
   expect(item.quote).toBe('예약 가능한 일정을 확인하고');
   expect(item.quoteValid).toBe(true);
 });
+
+// ───── 재검수(b371952) R1: 여러 저장이 동시에 실패한 뒤 한 번에 재시도 ─────
+async function taskPanelWithBlockedPatch(page: Page, request: APIRequestContext, title: string) {
+  const { taskId } = await requestTaskWith(request, title, ['고객이 예약 가능한 날짜를 볼 수 있다']);
+  await page.goto(`/tasks/${taskId}`);
+  const panel = page.getByRole('complementary', { name: '작업 상세' });
+  const net = await blockPatch(page, '**/api/tasks/*');
+  return { taskId, panel, net };
+}
+
+test('[E2E-R1] 제목·설명 저장이 모두 실패해도 "다시 저장" 한 번으로 둘 다 저장되고 충돌이 나지 않는다', async ({ page, request }) => {
+  const { taskId, panel, net } = await taskPanelWithBlockedPatch(page, request, 'R1 제목+설명');
+  await panel.getByLabel('작업 제목').fill('동시 실패 후 제목');
+  await panel.getByLabel('작업 제목').blur();
+  await panel.getByLabel('설명').fill('동시 실패 후 중요한 설명');
+  await panel.getByLabel('설명').blur();
+  await expect(panel.getByText('저장하지 못했어요.')).toBeVisible();
+  net.blocked = false;
+  await panel.getByRole('button', { name: '다시 저장' }).click();
+  await expect(panel.getByText('저장하지 못했어요.')).toHaveCount(0);
+  await expect(page.getByText('다른 곳에서 먼저 바뀐 내용이에요')).toHaveCount(0);
+  await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).description).toBe('동시 실패 후 중요한 설명');
+  const t = await (await request.get(`/api/tasks/${taskId}`)).json();
+  expect(t.title).toBe('동시 실패 후 제목'); // 서버에 두 필드 모두 저장됨
+  await expect(panel.getByLabel('설명')).toHaveValue('동시 실패 후 중요한 설명');
+});
+
+test('[E2E-R1] 제목·설명·상태 세 개가 모두 실패해도 한 번에 재시도되어 모두 저장된다', async ({ page, request }) => {
+  const { taskId, panel, net } = await taskPanelWithBlockedPatch(page, request, 'R1 세 개');
+  await panel.getByLabel('작업 제목').fill('세 개 실패 제목');
+  await panel.getByLabel('작업 제목').blur();
+  await panel.getByLabel('설명').fill('세 개 실패 설명');
+  await panel.getByLabel('설명').blur();
+  await panel.getByRole('button', { name: '진행 중', exact: true }).click();
+  await expect(panel.getByText('저장하지 못했어요.')).toBeVisible();
+  net.blocked = false;
+  await panel.getByRole('button', { name: '다시 저장' }).click();
+  await expect(panel.getByText('저장하지 못했어요.')).toHaveCount(0);
+  await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).status).toBe('doing');
+  const t = await (await request.get(`/api/tasks/${taskId}`)).json();
+  expect([t.title, t.description, t.status]).toEqual(['세 개 실패 제목', '세 개 실패 설명', 'doing']);
+});
+
+test('[E2E-R1] 다시 저장이 또 실패하면 실패 표시와 재시도 버튼이 유지되고, 복구 후 저장된다', async ({ page, request }) => {
+  const { taskId, panel, net } = await taskPanelWithBlockedPatch(page, request, 'R1 반복');
+  await panel.getByLabel('작업 제목').fill('반복 재시도 제목');
+  await panel.getByLabel('작업 제목').blur();
+  await panel.getByLabel('설명').fill('반복 재시도 설명');
+  await panel.getByLabel('설명').blur();
+  await expect(panel.getByText('저장하지 못했어요.')).toBeVisible();
+  await panel.getByRole('button', { name: '다시 저장' }).click(); // 아직 연결이 끊긴 상태
+  await expect(panel.getByText('저장하지 못했어요.')).toBeVisible();
+  await expect(panel.getByRole('button', { name: '다시 저장' })).toBeVisible();
+  net.blocked = false;
+  await panel.getByRole('button', { name: '다시 저장' }).click();
+  await expect(panel.getByText('저장하지 못했어요.')).toHaveCount(0);
+  await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).description).toBe('반복 재시도 설명');
+  expect((await (await request.get(`/api/tasks/${taskId}`)).json()).title).toBe('반복 재시도 제목');
+});
+
+test('[E2E-R1] 그 사이 다른 곳에서 작업이 바뀌어 409 가 나면 오류를 숨기지 않고, 다시 저장하면 최신 버전으로 저장된다', async ({ page, request }) => {
+  const { taskId, panel, net } = await taskPanelWithBlockedPatch(page, request, 'R1 외부 수정');
+  await panel.getByLabel('작업 제목').fill('내가 쓴 제목');
+  await panel.getByLabel('작업 제목').blur();
+  await expect(panel.getByText('저장하지 못했어요.')).toBeVisible();
+  // 다른 곳(여기서는 API 직접 호출)에서 같은 작업의 설명을 먼저 바꿔 version 이 올라간다.
+  const cur = await (await request.get(`/api/tasks/${taskId}`)).json();
+  const ext = await request.patch(`/api/tasks/${taskId}`, { data: { version: cur.version, description: '외부에서 바꾼 설명' } });
+  expect(ext.ok()).toBeTruthy();
+  net.blocked = false;
+  await panel.getByRole('button', { name: '다시 저장' }).click();
+  // 첫 재시도는 409 → 오류 안내와 재시도 버튼이 남아 있어야 한다(숨겨지면 안 됨)
+  await expect(panel.getByText('다른 곳에서 먼저 바뀐 내용이에요. 다시 저장하면 지금 입력한 내용으로 덮어써요.')).toBeVisible();
+  await expect(panel.getByRole('button', { name: '다시 저장' })).toBeVisible();
+  await expect(panel.getByLabel('작업 제목')).toHaveValue('내가 쓴 제목'); // 초안은 그대로
+  await panel.getByRole('button', { name: '다시 저장' }).click(); // 최신 버전으로 다시 저장
+  await expect(panel.getByText('저장하지 못했어요.')).toHaveCount(0);
+  await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).title).toBe('내가 쓴 제목');
+  const t = await (await request.get(`/api/tasks/${taskId}`)).json();
+  expect(t.description).toBe('외부에서 바꾼 설명'); // 내가 건드리지 않은 필드는 덮어쓰지 않는다
+});

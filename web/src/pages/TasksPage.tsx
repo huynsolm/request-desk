@@ -163,7 +163,7 @@ export function TasksPage() {
 function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: () => void; onChanged: () => void }) {
   const nav = useNavigate();
   const toast = useToast();
-  const saver = useSaver();
+  const saver = useSaver((e) => toast(e.message));
   const [t, setT] = useState<TaskDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -183,8 +183,15 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
   const editCritRef = useRef(editCrit);
   editCritRef.current = editCrit;
 
-  /** 서버 응답을 화면에 반영한다. 입력 중인 제목·설명 초안은 덮어쓰지 않는다. */
-  const applyKeepDrafts = (d: TaskDetail) => setT(d);
+  /**
+   * 서버 응답을 화면에 반영한다. 입력 중인 제목·설명 초안은 덮어쓰지 않는다.
+   * tRef 도 즉시 갱신한다: 대기 중인 저장 여러 개를 연달아 다시 보낼 때, 다음 저장이 렌더를 기다리지 않고
+   * 방금 받은 최신 version 을 쓰도록 하기 위해서다.
+   */
+  const applyKeepDrafts = (d: TaskDetail) => {
+    tRef.current = d;
+    setT(d);
+  };
 
   useEffect(() => {
     api
@@ -197,42 +204,46 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
       .catch((e: ApiError) => setErr(e.code === 'not_found' ? '작업을 찾을 수 없어요.' : '작업을 불러오지 못했어요.'));
   }, [taskId]);
 
-  /** 충돌(다른 곳에서 먼저 바뀜)이면 최신 작업 정보만 가져오고, 사용자가 쓴 초안은 그대로 둔다. */
-  const afterFailure = async (e: ApiError) => {
-    if (e.retryable) return;
-    toast(e.code === 'version_conflict' ? '다른 곳에서 먼저 바뀐 내용이에요. 입력한 내용은 그대로 두었어요. 확인한 뒤 다시 저장해 주세요.' : e.message);
-    if (e.code === 'version_conflict') {
-      const fresh = await api.getTask(taskId).catch(() => null);
-      if (fresh) applyKeepDrafts(fresh);
-    }
-  };
-
   /**
    * 작업 변경 저장. build 는 실행하는 시점에 호출되어 그때의 최신 초안으로 패치를 만든다(다시 저장 때도 마찬가지).
    * 성공 응답은 최초 실행과 재시도 모두 같은 경로로 반영되므로 version 이 항상 최신으로 유지된다.
+   * 충돌(409, 다른 곳에서 먼저 바뀜)이면 최신 서버 상태만 받아 오고 저장 실패 상태를 유지한다:
+   * 사용자의 초안은 그대로 남고, "다시 저장"을 누르면 최신 버전으로 지금 입력을 저장한다.
    */
   const save = async (key: string, build: () => { title?: string; description?: string; status?: TaskStatus } | null) => {
-    const r = await saver.track(key, async () => {
+    await saver.track(key, async () => {
       const cur = tRef.current;
       const patch = build();
       if (!cur || !patch) return null;
-      const d = await api.updateTask(cur.id, { version: cur.version, ...patch });
-      applyKeepDrafts(d);
-      onChanged();
-      notifyChanged();
-      return d;
+      try {
+        const d = await api.updateTask(cur.id, { version: cur.version, ...patch });
+        applyKeepDrafts(d);
+        onChanged();
+        notifyChanged();
+        return d;
+      } catch (e) {
+        if (e instanceof ApiError && e.code === 'version_conflict') {
+          const fresh = await api.getTask(cur.id).catch(() => null);
+          if (fresh) applyKeepDrafts(fresh);
+          throw new ApiError(0, 'conflict_retry', '다른 곳에서 먼저 바뀐 내용이에요. 다시 저장하면 지금 입력한 내용으로 덮어써요.');
+        }
+        throw e;
+      }
     });
-    if (!r.ok) await afterFailure(r.error);
   };
 
   /** 완료 조건 변경. 성공하면 최초·재시도 모두 서버 응답을 반영한다. */
   const crit = async (key: string, fn: () => Promise<TaskDetail>) => {
-    const r = await saver.track(key, async () => {
-      const d = await fn();
-      applyKeepDrafts(d);
-      onChanged();
-      return d;
-    });
+    const r = await saver.track(
+      key,
+      async () => {
+        const d = await fn();
+        applyKeepDrafts(d);
+        onChanged();
+        return d;
+      },
+      { inline: true },
+    );
     if (!r.ok) {
       if (!r.error.retryable) setCritError(r.error.message);
       return false;
@@ -256,14 +267,17 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
         onChanged();
         return d;
       },
-      () => {
-        const now = editCritRef.current;
-        if (now && now.id === cur.id && now.text === submitted) setEditCrit(null);
-        else if (now) setEditCrit({ ...now, busy: false });
-      },
-      async () => {
-        if (editCritRef.current) await commitCritEditRef.current();
-        else saver.dismiss(`crit-edit:${cur.id}`);
+      {
+        inline: true,
+        onOk: () => {
+          const now = editCritRef.current;
+          if (now && now.id === cur.id && now.text === submitted) setEditCrit(null);
+          else if (now) setEditCrit({ ...now, busy: false });
+        },
+        retry: async () => {
+          if (editCritRef.current) await commitCritEditRef.current();
+          else saver.dismiss(`crit-edit:${cur.id}`);
+        },
       },
     );
     if (!r.ok) {
@@ -314,7 +328,8 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
       <div className="tpanel-body">
         {saver.state === 'error' && (
           <div className="notice notice-err" role="alert">
-            <strong>저장하지 못했어요.</strong> 입력한 내용은 그대로 남아 있어요.{' '}
+            <strong>저장하지 못했어요.</strong> 입력한 내용은 그대로 남아 있어요.
+            {saver.message && <div style={{ margin: '2px 0 6px' }}>{saver.message}</div>}{' '}
             <button type="button" className="btn-retry" onClick={() => void saver.retry()}>
               다시 저장
             </button>
