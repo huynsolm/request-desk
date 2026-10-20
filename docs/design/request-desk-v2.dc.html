@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+body{margin:0;background:#f6f6f7;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#4447a8}a:hover{color:#383b92}
+button,input,textarea,select{font-family:inherit}
+@keyframes rd-spin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;min-width:1200px;background:#f6f6f7;font-family:'Pretendard Variable',Pretendard,-apple-system,'Apple SD Gothic Neo',sans-serif;color:#1d2026;font-size:16px;line-height:1.55;letter-spacing:-0.01em">
+
+  <aside style="width:232px;flex-shrink:0;background:#fff;border-right:1px solid #e4e5e8;display:flex;flex-direction:column;padding:20px 12px">
+    <div style="display:flex;align-items:center;gap:10px;padding:4px 10px 24px">
+      <div style="width:28px;height:28px;border-radius:7px;background:#4447a8;color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center">R</div>
+      <div style="font-weight:700;font-size:17px">리퀘스트 데스크</div>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:2px">
+      <button onClick="{{ goRequests }}" style="display:flex;align-items:center;justify-content:space-between;height:40px;padding:0 12px;border:none;border-radius:8px;background:{{ nav.reqBg }};color:{{ nav.reqColor }};font-size:15px;font-weight:{{ nav.reqWeight }};cursor:pointer;text-align:left">
+        <span>요청</span><span style="font-size:13px;color:#6b7280">{{ nav.reqCount }}</span>
+      </button>
+      <button onClick="{{ goTasks }}" style="display:flex;align-items:center;justify-content:space-between;height:40px;padding:0 12px;border:none;border-radius:8px;background:{{ nav.taskBg }};color:{{ nav.taskColor }};font-size:15px;font-weight:{{ nav.taskWeight }};cursor:pointer;text-align:left">
+        <span>작업</span><span style="font-size:13px;color:#6b7280">{{ nav.taskCount }}</span>
+      </button>
+    </nav>
+    <div style="flex:1"></div>
+    <div style="border:1px dashed #d3d5da;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;background:#fafafb">
+      <div style="font-size:13px;font-weight:700;color:#4a505b">프로토타입 시나리오</div>
+      <div style="font-size:12.5px;color:#6b7280;line-height:1.5">실제 AI·서버 없이 상태를 체험하는 설정이에요.</div>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13.5px;color:#1d2026;cursor:pointer">
+        <input type="checkbox" checked="{{ failAnalysis }}" onChange="{{ toggleFailAnalysis }}" style="margin-top:3px;accent-color:#4447a8">
+        <span>다음 분석 실패시키기</span>
+      </label>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13.5px;color:#1d2026;cursor:pointer">
+        <input type="checkbox" checked="{{ failSave }}" onChange="{{ toggleFailSave }}" style="margin-top:3px;accent-color:#4447a8">
+        <span>저장 실패시키기</span>
+      </label>
+      <div style="display:flex;flex-direction:column;gap:6px;padding-top:4px">
+        <button onClick="{{ resetEmpty }}" style="height:32px;border-radius:7px;border:1px solid #d3d5da;background:#fff;font-size:13px;color:#1d2026;cursor:pointer" style-hover="background:#f3f4f6">처음 사용 상태로 보기</button>
+        <button onClick="{{ resetSample }}" style="height:32px;border-radius:7px;border:1px solid #d3d5da;background:#fff;font-size:13px;color:#1d2026;cursor:pointer" style-hover="background:#f3f4f6">샘플 데이터로 되돌리기</button>
+      </div>
+    </div>
+  </aside>
+
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column;height:100vh;overflow:hidden">
+
+    <sc-if value="{{ isRequests }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="01 요청 목록" style="flex:1;overflow:auto;padding:32px 40px 48px">
+        <div style="max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:20px">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+            <div>
+              <h1 style="margin:0;font-size:26px;font-weight:700;letter-spacing:-0.02em">고객 요청</h1>
+              <p style="margin:6px 0 0;color:#4a505b;font-size:15px">메신저나 이메일로 받은 요청을 붙여 넣고 요구사항으로 정리해요.</p>
+            </div>
+            <button onClick="{{ openNew }}" style="height:40px;padding:0 16px;border-radius:8px;border:1px solid #4447a8;background:#4447a8;color:#fff;font-size:15px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px" style-hover="background:#383b92">+ 새 요청</button>
+          </div>
+
+          <sc-if value="{{ hasRequests }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+              <input value="{{ search }}" onChange="{{ onSearch }}" placeholder="요청 제목이나 고객명으로 검색" style="flex:1;min-width:260px;max-width:420px;height:40px;padding:0 14px;border:1px solid #d3d5da;border-radius:8px;font-size:15px;color:#1d2026;background:#fff;outline:none" style-focus="border-color:#4447a8;box-shadow:0 0 0 3px #e3e4f8">
+              <div style="display:flex;gap:2px;border:1px solid #d3d5da;border-radius:8px;padding:3px;background:#fff">
+                <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+                  <button onClick="{{ f.onClick }}" style="height:32px;padding:0 12px;border:none;border-radius:6px;background:{{ f.bg }};color:{{ f.color }};font-size:14px;font-weight:{{ f.weight }};cursor:pointer;display:flex;gap:6px;align-items:center">{{ f.label }}<span style="font-size:12.5px;color:#6b7280">{{ f.count }}</span></button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ showTable }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border:1px solid #e4e5e8;border-radius:10px;overflow:hidden">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) 200px 130px 130px;gap:16px;padding:12px 20px;border-bottom:1px solid #e4e5e8;font-size:13.5px;font-weight:600;color:#6b7280;background:#fafafb">
+                <div>요청 제목</div><div>고객명</div><div>상태</div><div>등록일</div>
+              </div>
+              <sc-for list="{{ rows }}" as="r" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) 200px 130px 130px;gap:16px;padding:16px 20px;border-bottom:1px solid #eeeff1;align-items:center" style-hover="background:#fafafd">
+                  <div style="min-width:0">
+                    <button onClick="{{ r.onOpen }}" style="border:none;background:none;padding:0;font-size:16px;font-weight:600;color:#1d2026;cursor:pointer;text-align:left" style-hover="color:#4447a8;text-decoration:underline">{{ r.title }}</button>
+                    <div style="font-size:14px;color:#6b7280;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.preview }}</div>
+                  </div>
+                  <div style="font-size:15px;color:#1d2026">{{ r.client }}</div>
+                  <div><span style="display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:6px;font-size:13px;font-weight:600;background:{{ r.badge.bg }};color:{{ r.badge.color }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ r.badge.color }}"></span>{{ r.badge.label }}</span></div>
+                  <div style="font-size:14.5px;color:#4a505b">{{ r.date }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e4e5e8;border-radius:10px;padding:56px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px">
+              <div style="font-size:17px;font-weight:600">{{ noResultsTitle }}</div>
+              <div style="font-size:15px;color:#4a505b">검색어를 줄이거나 상태 필터를 ‘전체’로 바꿔 보세요.</div>
+              <button onClick="{{ clearSearch }}" style="margin-top:10px;height:40px;padding:0 16px;border-radius:8px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:15px;font-weight:500;cursor:pointer" style-hover="background:#f3f4f6">검색 조건 초기화</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ firstUse }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e4e5e8;border-radius:10px;padding:64px 24px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center">
+              <div style="font-size:19px;font-weight:700">아직 등록된 요청이 없어요</div>
+              <div style="font-size:15.5px;color:#4a505b;max-width:440px;text-wrap:pretty">고객이 보낸 메시지나 이메일을 그대로 붙여 넣으면, 요구사항과 확인할 질문으로 나눠 정리할 수 있어요.</div>
+              <ol style="margin:14px 0 6px;padding:0;list-style:none;display:flex;gap:8px;font-size:14px;color:#4a505b">
+                <li style="padding:6px 12px;border:1px solid #e4e5e8;border-radius:999px">1 요청 붙여 넣기</li>
+                <li style="padding:6px 12px;border:1px solid #e4e5e8;border-radius:999px">2 분석 결과 검토·확정</li>
+                <li style="padding:6px 12px;border:1px solid #e4e5e8;border-radius:999px">3 작업 만들기</li>
+              </ol>
+              <button onClick="{{ openNew }}" style="height:40px;padding:0 16px;border-radius:8px;border:1px solid #4447a8;background:#4447a8;color:#fff;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#383b92">첫 요청 등록하기</button>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="02 요청 상세와 분석" style="flex:1;display:flex;flex-direction:column;min-height:0">
+        <header style="background:#fff;border-bottom:1px solid #eeeff1;padding:12px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+          <div style="display:flex;align-items:center;gap:12px;min-width:0;flex-wrap:wrap">
+            <button onClick="{{ goRequests }}" style="border:none;background:none;padding:0;font-size:14px;color:#4a505b;cursor:pointer" style-hover="color:#4447a8">← 고객 요청</button>
+            <span style="width:1px;height:16px;background:#d3d5da"></span>
+            <h1 style="margin:0;font-size:20px;font-weight:700;letter-spacing:-0.02em">{{ req.title }}</h1>
+            <span style="display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:6px;font-size:13px;font-weight:600;background:{{ reqBadge.bg }};color:{{ reqBadge.color }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ reqBadge.color }}"></span>{{ reqBadge.label }}</span>
+            <span style="font-size:14.5px;color:#4a505b">{{ req.client }} · {{ req.date }} 등록</span>
+          </div>
+          <div title="편집한 내용은 자동으로 저장돼요. 확정과는 별개예요." style="flex-shrink:0;font-size:14px">
+            <sc-if value="{{ saveOk }}" hint-placeholder-val="{{ true }}"><span style="color:#4a505b">✓ 편집 내용 자동 저장됨</span></sc-if>
+            <sc-if value="{{ saving }}" hint-placeholder-val="{{ false }}"><span style="color:#4a505b;display:flex;align-items:center;gap:6px">{{ spinner }}저장 중…</span></sc-if>
+            <sc-if value="{{ saveErr }}" hint-placeholder-val="{{ false }}"><span style="color:#a3302a;font-weight:600">! 저장 실패</span></sc-if>
+          </div>
+        </header>
+
+        <div style="background:#fff;border-bottom:1px solid #e4e5e8;padding:10px 28px;display:flex;align-items:center;gap:20px;min-height:60px">
+          <ol style="display:flex;gap:4px;list-style:none;margin:0;padding:0;flex-shrink:0;align-items:center">
+            <sc-for list="{{ steps }}" as="s" hint-placeholder-count="3">
+              <li style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:{{ s.weight }};color:{{ s.color }}">
+                <span style="width:20px;height:20px;border-radius:50%;border:1.5px solid {{ s.dotBorder }};background:{{ s.dotBg }};color:{{ s.dotColor }};font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ s.mark }}</span>{{ s.label }}<span style="color:#b8bcc5;padding:0 6px">{{ s.sep }}</span>
+              </li>
+            </sc-for>
+          </ol>
+          <div style="flex:1;min-width:0;font-size:15px;color:#1d2026;text-wrap:pretty">{{ step.msg }}</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+            <sc-if value="{{ step.hasLink }}"><button onClick="{{ step.onLink }}" style="height:40px;padding:0 10px;border:none;background:transparent;color:#4a505b;font-size:14.5px;cursor:pointer;border-radius:8px" style-hover="background:#f0f1f3;color:#1d2026">{{ step.linkLabel }}</button></sc-if>
+            <sc-if value="{{ step.isPrimary }}"><button onClick="{{ step.onClick }}" style="height:40px;padding:0 18px;border-radius:8px;border:1px solid #4447a8;background:#4447a8;color:#fff;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#383b92">{{ step.label }}</button></sc-if>
+            <sc-if value="{{ step.isDisabled }}"><button disabled="{{ true }}" style="height:40px;padding:0 18px;border-radius:8px;border:1px solid #e4e5e8;background:#eceef1;color:#7a808a;font-size:15px;font-weight:600;cursor:not-allowed;display:flex;align-items:center;gap:8px">{{ step.spin }}{{ step.label }}</button></sc-if>
+            <sc-if value="{{ step.isSecondary }}"><button onClick="{{ step.onClick }}" style="height:40px;padding:0 16px;border-radius:8px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:15px;font-weight:500;cursor:pointer" style-hover="background:#f3f4f6">{{ step.label }}</button></sc-if>
+          </div>
+        </div>
+
+        <sc-if value="{{ saveErr }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#fcebea;border-bottom:1px solid #f0c4c0;padding:10px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+            <div style="font-size:15px;color:#7d2420"><strong>편집 내용을 저장하지 못했어요.</strong> 원문과 수정한 내용은 이 화면에 그대로 남아 있어요.</div>
+            <button onClick="{{ retrySave }}" style="height:34px;padding:0 14px;border-radius:8px;border:1px solid #a3302a;background:#fff;color:#a3302a;font-size:14px;font-weight:600;cursor:pointer;flex-shrink:0">다시 저장</button>
+          </div>
+        </sc-if>
+
+        <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,4fr) minmax(0,6fr)">
+          <section style="background:#fff;border-right:1px solid #e4e5e8;overflow:auto;padding:20px 28px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:8px">
+                <h2 style="margin:0;font-size:16px;font-weight:700">고객 요청 원문</h2>
+                <span style="font-size:12.5px;font-weight:600;color:#4a505b;border:1px solid #d3d5da;border-radius:5px;padding:0 6px">고객이 말한 내용</span>
+              </div>
+              <button onClick="{{ openEdit }}" style="height:30px;padding:0 10px;border-radius:7px;border:none;background:transparent;color:#4a505b;font-size:14px;cursor:pointer" style-hover="background:#f0f1f3">요청 정보 수정</button>
+            </div>
+            <div style="border:1px solid #e4e5e8;border-radius:8px;padding:16px 18px;background:#fcfcfd;font-size:17px;line-height:1.85;white-space:pre-wrap;word-break:keep-all"><sc-for list="{{ segments }}" as="sg" hint-placeholder-count="1"><span style="background:{{ sg.bg }};border-bottom:{{ sg.border }};border-radius:3px;transition:background .15s">{{ sg.text }}</span><sc-if value="{{ sg.hasNum }}"><sup style="font-size:11px;font-weight:700;color:#3a3d9a;background:#eef0fb;border-radius:4px;padding:0 4px;margin-left:2px">{{ sg.num }}</sup></sc-if></sc-for></div>
+            <sc-if value="{{ hasAnalysis }}" hint-placeholder-val="{{ false }}">
+              <p style="margin:0;font-size:14px;color:#6b7280;text-wrap:pretty">밑줄과 번호는 ‘명시된 요구사항’의 근거 문장이에요. 요구사항에 마우스를 올리면 해당 문장이 강조돼요.</p>
+            </sc-if>
+            <sc-if value="{{ hasReqTasks }}" hint-placeholder-val="{{ false }}">
+              <div style="border-top:1px solid #eeeff1;padding-top:14px;display:flex;flex-direction:column;gap:8px">
+                <h3 style="margin:0;font-size:15px;font-weight:700">이 요청으로 만든 작업</h3>
+                <sc-for list="{{ reqTasks }}" as="t" hint-placeholder-count="2">
+                  <button onClick="{{ t.onOpen }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border:1px solid #e4e5e8;border-radius:8px;background:#fff;cursor:pointer;text-align:left;font-size:15px;color:#1d2026" style-hover="border-color:#b9bbe6">
+                    <span>{{ t.title }}</span>
+                    <span style="font-size:13px;font-weight:600;padding:0 8px;border-radius:6px;background:{{ t.badge.bg }};color:{{ t.badge.color }}">{{ t.badge.label }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </sc-if>
+          </section>
+
+          <section style="overflow:auto;padding:16px 28px 32px;display:flex;flex-direction:column;gap:16px;background:#f6f6f7">
+            <sc-if value="{{ aIdle }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid #e4e5e8;border-radius:10px;padding:24px;display:flex;flex-direction:column;gap:6px">
+                <div style="font-size:17px;font-weight:700">아직 분석하지 않았어요</div>
+                <div style="font-size:15.5px;color:#4a505b;text-wrap:pretty">위의 ‘요청 분석하기’를 누르면 원문을 명시된 요구사항, 확인할 질문, 미확정 사항으로 나눠 제안해요. 제안은 검토하기 전까지 확정되지 않아요.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ aLoading }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid #e4e5e8;border-radius:10px;padding:20px 24px;display:flex;flex-direction:column;gap:10px">
+                <div style="font-size:14px;color:#6b7280">명시된 요구사항</div>
+                <div style="height:14px;width:72%;border-radius:4px;background:#eeeff2"></div>
+                <div style="height:14px;width:58%;border-radius:4px;background:#eeeff2"></div>
+                <div style="font-size:14px;color:#6b7280;margin-top:6px">확인할 질문</div>
+                <div style="height:14px;width:64%;border-radius:4px;background:#eeeff2"></div>
+                <div style="font-size:14px;color:#6b7280;margin-top:6px">미확정 사항</div>
+                <div style="height:14px;width:48%;border-radius:4px;background:#eeeff2"></div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ aError }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid #f0c4c0;border-radius:10px;padding:24px;display:flex;flex-direction:column;gap:6px">
+                <div style="font-size:17px;font-weight:700;color:#a3302a">분석 결과를 받지 못했어요</div>
+                <div style="font-size:15.5px;color:#4a505b">일시적인 문제일 수 있어요. 원문은 그대로 남아 있으니 위의 ‘다시 시도’를 눌러 주세요.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ aDone }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:16px">
+
+                <div style="background:#fff;border:1px solid #e4e5e8;border-radius:10px">
+                  <div style="position:sticky;top:-16px;z-index:2;background:#fff;border-radius:10px 10px 0 0;padding:12px 18px 10px;border-bottom:1px solid #e4e5e8">
+                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+                      <h3 style="margin:0;font-size:17px;font-weight:700">명시된 요구사항 <span style="color:#6b7280;font-weight:500;font-size:15px">{{ secReq.count }}개</span></h3>
+                      <sc-if value="{{ secReq.hasPending }}"><span style="font-size:13.5px;font-weight:600;color:#855400">검토 전 {{ secReq.pending }}개</span></sc-if>
+                    </div>
+                    <div style="font-size:14.5px;color:#4a505b;margin-top:2px">고객이 원문에서 <strong style="color:#1d2026">직접 말한 내용</strong>이에요. 확정하면 작업으로 만들 수 있어요.</div>
+                  </div>
+                  <sc-for list="{{ reqItems }}" as="it" hint-placeholder-count="3">
+                    <div onMouseEnter="{{ it.onEnter }}" onMouseLeave="{{ it.onLeave }}" style="display:flex;gap:10px;padding:12px 18px;border-bottom:1px solid #f0f1f3;background:{{ it.rowBg }}">
+                      <sc-if value="{{ it.selectable }}">
+                        <button onClick="{{ it.onToggle }}" aria-label="작업으로 만들 요구사항 선택" style="width:20px;height:20px;border-radius:5px;border:1.5px solid {{ it.checkBorder }};background:{{ it.checkBg }};color:#fff;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;margin-top:2px">{{ it.checkMark }}</button>
+                      </sc-if>
+                      <span style="min-width:22px;height:22px;border-radius:5px;background:{{ it.numBg }};color:{{ it.numColor }};font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">{{ it.num }}</span>
+                      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+                        <sc-if value="{{ it.isEditing }}">
+                          <div style="display:flex;flex-direction:column;gap:6px">
+                            <textarea autoFocus="{{ true }}" value="{{ it.editText }}" onChange="{{ onEditInput }}" onKeyDown="{{ onEditKey }}" rows="2" placeholder="요구사항을 입력해 주세요" style="width:100%;padding:8px 10px;border:1px solid #4447a8;box-shadow:0 0 0 3px #e3e4f8;border-radius:8px;font-size:16px;line-height:1.5;color:#1d2026;resize:vertical;outline:none"></textarea>
+                            <div style="display:flex;gap:6px;align-items:center">
+                              <button onClick="{{ commitEdit }}" style="height:30px;padding:0 12px;border-radius:7px;border:1px solid #4447a8;background:#fff;color:#4447a8;font-size:14px;font-weight:600;cursor:pointer">적용</button>
+                              <button onClick="{{ cancelEdit }}" style="height:30px;padding:0 12px;border-radius:7px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:14px;cursor:pointer">취소</button>
+                              <span style="font-size:13px;color:#6b7280">Enter 적용 · Esc 취소</span>
+                            </div>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ it.notEditing }}"><div style="font-size:16px;font-weight:600;line-height:1.5">{{ it.text }}</div></sc-if>
+                        <sc-if value="{{ it.hasSource }}"><div style="font-size:14.5px;color:#4a505b">원문 “{{ it.source }}”</div></sc-if>
+                        <sc-if value="{{ it.noSource }}"><div style="font-size:14px;color:#6b7280">원문 근거 없음 · 담당자가 추가한 항목</div></sc-if>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px">
+                          <span style="font-size:12.5px;font-weight:600;color:{{ it.lbl.color }};background:{{ it.lbl.bg }};border:1px solid {{ it.lbl.border }};border-radius:5px;padding:0 6px">{{ it.lbl.text }}</span>
+                          <sc-if value="{{ it.hasTask }}"><button onClick="{{ it.onGoTask }}" style="font-size:12.5px;font-weight:600;color:#26683b;background:#e7f3eb;border:1px solid #bfdcc8;border-radius:5px;padding:0 6px;cursor:pointer" style-hover="text-decoration:underline">작업 생성됨 →</button></sc-if>
+                        </div>
+                      </div>
+                      <sc-if value="{{ it.canEdit }}">
+                        <div style="display:flex;gap:2px;align-items:flex-start;flex-shrink:0">
+                          <sc-if value="{{ it.needsReview }}"><button onClick="{{ it.onReview }}" style="height:30px;padding:0 10px;border-radius:7px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:13.5px;font-weight:500;cursor:pointer" style-hover="border-color:#4447a8;color:#4447a8">검토함으로 표시</button></sc-if>
+                          <button onClick="{{ it.onEdit }}" style="height:30px;padding:0 9px;border-radius:7px;border:none;background:transparent;color:#4a505b;font-size:13.5px;cursor:pointer" style-hover="background:#f0f1f3">수정</button>
+                          <button onClick="{{ it.onDelete }}" style="height:30px;padding:0 9px;border-radius:7px;border:none;background:transparent;color:#4a505b;font-size:13.5px;cursor:pointer" style-hover="background:#fcebea;color:#a3302a">삭제</button>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ unlocked }}">
+                    <button onClick="{{ addReq }}" style="width:100%;height:40px;border:none;background:transparent;color:#4447a8;font-size:14.5px;font-weight:600;cursor:pointer;text-align:left;padding:0 18px;border-radius:0 0 10px 10px" style-hover="background:#fafafd">+ 요구사항 추가</button>
+                  </sc-if>
+                </div>
+
+                <div style="background:#fff;border:1px solid #e4e5e8;border-radius:10px">
+                  <div style="position:sticky;top:-16px;z-index:2;background:#fff;border-radius:10px 10px 0 0;padding:12px 18px 10px;border-bottom:1px solid #e4e5e8">
+                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+                      <h3 style="margin:0;font-size:17px;font-weight:700">확인할 질문 <span style="color:#6b7280;font-weight:500;font-size:15px">{{ secQ.count }}개</span></h3>
+                      <sc-if value="{{ secQ.hasPending }}"><span style="font-size:13.5px;font-weight:600;color:#855400">검토 전 {{ secQ.pending }}개</span></sc-if>
+                    </div>
+                    <div style="font-size:14.5px;color:#4a505b;margin-top:2px">원문만으로는 알 수 없어 <strong style="color:#1d2026">고객에게 물어봐야 하는 내용</strong>이에요. 답을 받기 전에는 작업에 넣지 않아요.</div>
+                  </div>
+                  <sc-for list="{{ qItems }}" as="it" hint-placeholder-count="3">
+                    <div style="display:flex;gap:10px;padding:12px 18px;border-bottom:1px solid #f0f1f3;background:{{ it.rowBg }}">
+                      <span style="min-width:22px;height:22px;border-radius:50%;background:#f1f2f4;color:#4a505b;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">?</span>
+                      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+                        <sc-if value="{{ it.isEditing }}">
+                          <div style="display:flex;flex-direction:column;gap:6px">
+                            <textarea autoFocus="{{ true }}" value="{{ it.editText }}" onChange="{{ onEditInput }}" onKeyDown="{{ onEditKey }}" rows="2" placeholder="고객에게 물어볼 질문을 입력해 주세요" style="width:100%;padding:8px 10px;border:1px solid #4447a8;box-shadow:0 0 0 3px #e3e4f8;border-radius:8px;font-size:16px;line-height:1.5;color:#1d2026;resize:vertical;outline:none"></textarea>
+                            <div style="display:flex;gap:6px;align-items:center">
+                              <button onClick="{{ commitEdit }}" style="height:30px;padding:0 12px;border-radius:7px;border:1px solid #4447a8;background:#fff;color:#4447a8;font-size:14px;font-weight:600;cursor:pointer">적용</button>
+                              <button onClick="{{ cancelEdit }}" style="height:30px;padding:0 12px;border-radius:7px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:14px;cursor:pointer">취소</button>
+                              <span style="font-size:13px;color:#6b7280">Enter 적용 · Esc 취소</span>
+                            </div>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ it.notEditing }}"><div style="font-size:16px;font-weight:500;line-height:1.5">{{ it.text }}</div></sc-if>
+                        <sc-if value="{{ it.hasNote }}"><div style="font-size:14.5px;color:#4a505b">AI가 질문한 이유: {{ it.note }}</div></sc-if>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">
+                          <span style="font-size:12.5px;font-weight:600;color:{{ it.lbl.color }};background:{{ it.lbl.bg }};border:1px solid {{ it.lbl.border }};border-radius:5px;padding:0 6px">{{ it.lbl.text }}</span>
+                        </div>
+                      </div>
+                      <sc-if value="{{ it.canEdit }}">
+                        <div style="display:flex;gap:2px;align-items:flex-start;flex-shrink:0">
+                          <sc-if value="{{ it.needsReview }}"><button onClick="{{ it.onReview }}" style="height:30px;padding:0 10px;border-radius:7px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:13.5px;font-weight:500;cursor:pointer" style-hover="border-color:#4447a8;color:#4447a8">검토함으로 표시</button></sc-if>
+                          <button onClick="{{ it.onEdit }}" style="height:30px;padding:0 9px;border-radius:7px;border:none;background:transparent;color:#4a505b;font-size:13.5px;cursor:pointer" style-hover="background:#f0f1f3">수정</button>
+                          <button onClick="{{ it.onDelete }}" style="height:30px;padding:0 9px;border-radius:7px;border:none;background:transparent;color:#4a505b;font-size:13.5px;cursor:pointer" style-hover="background:#fcebea;color:#a3302a">삭제</button>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ unlocked }}">
+                    <button onClick="{{ addQ }}" style="width:100%;height:40px;border:none;background:transparent;color:#4447a8;font-size:14.5px;font-weight:600;cursor:pointer;text-align:left;padding:0 18px;border-radius:0 0 10px 10px" style-hover="background:#fafafd">+ 질문 추가</button>
+                  </sc-if>
+                </div>
+
+                <div style="background:#fafafb;border:1.5px dashed #b8bcc5;border-radius:10px">
+                  <div style="position:sticky;top:-16px;z-index:2;background:#fafafb;border-radius:10px 10px 0 0;padding:12px 18px 10px;border-bottom:1px dashed #d3d5da">
+                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+                      <h3 style="margin:0;font-size:17px;font-weight:700">미확정 사항 <span style="color:#6b7280;font-weight:500;font-size:15px">{{ secU.count }}개</span></h3>
+                      <sc-if value="{{ secU.hasPending }}"><span style="font-size:13.5px;font-weight:600;color:#855400">검토 전 {{ secU.pending }}개</span></sc-if>
+                    </div>
+                    <div style="font-size:14.5px;color:#4a505b;margin-top:2px"><strong style="color:#1d2026">아직 결정되지 않은 내용</strong>이에요. 사실로 취급하지 않고, 기능이나 작업에도 넣지 않아요.</div>
+                  </div>
+                  <sc-for list="{{ uItems }}" as="it" hint-placeholder-count="3">
+                    <div style="display:flex;gap:10px;padding:12px 18px;border-bottom:1px dashed #e0e2e6;background:{{ it.rowBgU }}">
+                      <span style="min-width:22px;height:22px;border-radius:50%;border:1.5px dashed #9aa0aa;flex-shrink:0;margin-top:1px"></span>
+                      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+                        <sc-if value="{{ it.isEditing }}">
+                          <div style="display:flex;flex-direction:column;gap:6px">
+                            <textarea autoFocus="{{ true }}" value="{{ it.editText }}" onChange="{{ onEditInput }}" onKeyDown="{{ onEditKey }}" rows="2" placeholder="정해지지 않은 내용을 입력해 주세요" style="width:100%;padding:8px 10px;border:1px solid #4447a8;box-shadow:0 0 0 3px #e3e4f8;border-radius:8px;font-size:16px;line-height:1.5;color:#1d2026;resize:vertical;outline:none;background:#fff"></textarea>
+                            <div style="display:flex;gap:6px;align-items:center">
+                              <button onClick="{{ commitEdit }}" style="height:30px;padding:0 12px;border-radius:7px;border:1px solid #4447a8;background:#fff;color:#4447a8;font-size:14px;font-weight:600;cursor:pointer">적용</button>
+                              <button onClick="{{ cancelEdit }}" style="height:30px;padding:0 12px;border-radius:7px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:14px;cursor:pointer">취소</button>
+                              <span style="font-size:13px;color:#6b7280">Enter 적용 · Esc 취소</span>
+                            </div>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ it.notEditing }}"><div style="font-size:16px;font-weight:500;line-height:1.5;color:#3a3f48">{{ it.text }}</div></sc-if>
+                        <sc-if value="{{ it.hasNote }}"><div style="font-size:14.5px;color:#4a505b">AI 판단: {{ it.note }}</div></sc-if>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">
+                          <span style="font-size:12.5px;font-weight:600;color:#4a505b;border:1px dashed #9aa0aa;background:#fff;border-radius:5px;padding:0 6px">미확정</span>
+                          <span style="font-size:12.5px;font-weight:600;color:{{ it.lbl.color }};background:{{ it.lbl.bg }};border:1px solid {{ it.lbl.border }};border-radius:5px;padding:0 6px">{{ it.lbl.text }}</span>
+                        </div>
+                      </div>
+                      <sc-if value="{{ it.canEdit }}">
+                        <div style="display:flex;gap:2px;align-items:flex-start;flex-shrink:0">
+                          <sc-if value="{{ it.needsReview }}"><button onClick="{{ it.onReview }}" style="height:30px;padding:0 10px;border-radius:7px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:13.5px;font-weight:500;cursor:pointer" style-hover="border-color:#4447a8;color:#4447a8">검토함으로 표시</button></sc-if>
+                          <button onClick="{{ it.onEdit }}" style="height:30px;padding:0 9px;border-radius:7px;border:none;background:transparent;color:#4a505b;font-size:13.5px;cursor:pointer" style-hover="background:#eceef1">수정</button>
+                          <button onClick="{{ it.onDelete }}" style="height:30px;padding:0 9px;border-radius:7px;border:none;background:transparent;color:#4a505b;font-size:13.5px;cursor:pointer" style-hover="background:#fcebea;color:#a3302a">삭제</button>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ unlocked }}">
+                    <button onClick="{{ addU }}" style="width:100%;height:40px;border:none;background:transparent;color:#4447a8;font-size:14.5px;font-weight:600;cursor:pointer;text-align:left;padding:0 18px;border-radius:0 0 10px 10px" style-hover="background:#f0f1f5">+ 미확정 사항 추가</button>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-if>
+          </section>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="03 작업 목록" style="flex:1;display:flex;min-height:0">
+        <div style="flex:1;min-width:0;overflow:auto;padding:32px 40px 48px">
+          <div style="max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:20px">
+            <div>
+              <h1 style="margin:0;font-size:26px;font-weight:700;letter-spacing:-0.02em">작업</h1>
+              <p style="margin:6px 0 0;color:#4a505b;font-size:15px">확정한 요구사항으로 만든 작업이에요. 작업을 누르면 설명과 완료 조건을 볼 수 있어요.</p>
+            </div>
+            <sc-if value="{{ hasTasks }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;gap:2px;border:1px solid #d3d5da;border-radius:8px;padding:3px;background:#fff;align-self:flex-start">
+                <sc-for list="{{ taskFilters }}" as="f" hint-placeholder-count="4">
+                  <button onClick="{{ f.onClick }}" style="height:32px;padding:0 12px;border:none;border-radius:6px;background:{{ f.bg }};color:{{ f.color }};font-size:14px;font-weight:{{ f.weight }};cursor:pointer;display:flex;gap:6px;align-items:center">{{ f.label }}<span style="font-size:12.5px;color:#6b7280">{{ f.count }}</span></button>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showTaskTable }}" hint-placeholder-val="{{ true }}">
+              <div style="background:#fff;border:1px solid #e4e5e8;border-radius:10px;overflow:hidden">
+                <div style="display:grid;grid-template-columns:minmax(240px,1fr) minmax(140px,220px) 120px;gap:16px;padding:12px 20px;border-bottom:1px solid #e4e5e8;font-size:13.5px;font-weight:600;color:#6b7280;background:#fafafb">
+                  <div>작업</div><div>연결된 요청</div><div>상태</div>
+                </div>
+                <sc-for list="{{ taskRows }}" as="t" hint-placeholder-count="3">
+                  <div onClick="{{ t.onOpen }}" style="display:grid;grid-template-columns:minmax(240px,1fr) minmax(140px,220px) 120px;gap:16px;padding:15px 20px;border-bottom:1px solid #eeeff1;align-items:center;cursor:pointer;background:{{ t.rowBg }};box-shadow:{{ t.rowShadow }}" style-hover="background:#fafafd">
+                    <div style="min-width:0">
+                      <div style="font-size:16px;font-weight:600;text-decoration:{{ t.deco }};color:{{ t.titleColor }}">{{ t.title }}</div>
+                      <div style="font-size:13.5px;color:#6b7280;margin-top:2px">완료 조건 {{ t.critDone }}/{{ t.critTotal }}</div>
+                    </div>
+                    <div style="min-width:0">
+                      <button onClick="{{ t.onReq }}" style="border:none;background:none;padding:0;font-size:15px;color:#4447a8;cursor:pointer;text-align:left;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" style-hover="text-decoration:underline">{{ t.reqTitle }}</button>
+                      <div style="font-size:13.5px;color:#6b7280">{{ t.reqClient }}</div>
+                    </div>
+                    <div>
+                      <select value="{{ t.status }}" onChange="{{ t.onStatus }}" onClick="{{ stop }}" aria-label="작업 상태" style="height:32px;padding:0 8px;border-radius:7px;border:1px solid {{ t.badge.border }};background:{{ t.badge.bg }};color:{{ t.badge.color }};font-size:14px;font-weight:600;cursor:pointer;outline:none">
+                        <option value="할 일">할 일</option>
+                        <option value="진행 중">진행 중</option>
+                        <option value="완료">완료</option>
+                      </select>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ taskFilterEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid #e4e5e8;border-radius:10px;padding:48px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px">
+                <div style="font-size:17px;font-weight:600">‘{{ taskFilterLabel }}’ 상태인 작업이 없어요</div>
+                <button onClick="{{ taskFilterAll }}" style="margin-top:8px;height:38px;padding:0 14px;border-radius:8px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:15px;cursor:pointer" style-hover="background:#f3f4f6">전체 작업 보기</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ noTasks }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid #e4e5e8;border-radius:10px;padding:64px 24px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center">
+                <div style="font-size:19px;font-weight:700">아직 만든 작업이 없어요</div>
+                <div style="font-size:15.5px;color:#4a505b;max-width:460px;text-wrap:pretty">요청을 분석하고 검토해 확정한 뒤, 요구사항을 선택해 작업으로 만들 수 있어요.</div>
+                <button onClick="{{ goRequests }}" style="margin-top:8px;height:40px;padding:0 16px;border-radius:8px;border:1px solid #4447a8;background:#4447a8;color:#fff;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#383b92">고객 요청으로 이동</button>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <sc-if value="{{ hasTaskDetail }}" hint-placeholder-val="{{ false }}">
+          <aside style="width:400px;flex-shrink:0;background:#fff;border-left:1px solid #e4e5e8;display:flex;flex-direction:column;min-height:0">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid #eeeff1">
+              <div style="font-size:14px;font-weight:600;color:#4a505b">작업 상세</div>
+              <button onClick="{{ closeTask }}" aria-label="닫기" style="width:32px;height:32px;border:none;border-radius:7px;background:transparent;font-size:18px;color:#4a505b;cursor:pointer" style-hover="background:#f0f1f3">×</button>
+            </div>
+            <div style="flex:1;overflow:auto;padding:20px 24px 28px;display:flex;flex-direction:column;gap:20px">
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:14px;font-weight:600;color:#4a505b">제목</span>
+                <input value="{{ task.title }}" onChange="{{ onTaskTitle }}" style="height:44px;padding:0 12px;border:1px solid #d3d5da;border-radius:8px;font-size:17px;font-weight:600;color:#1d2026;outline:none" style-focus="border-color:#4447a8;box-shadow:0 0 0 3px #e3e4f8">
+              </label>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:14px;font-weight:600;color:#4a505b">상태</span>
+                <div style="display:flex;gap:2px;border:1px solid #d3d5da;border-radius:8px;padding:3px;align-self:flex-start">
+                  <sc-for list="{{ taskStatusOpts }}" as="o" hint-placeholder-count="3">
+                    <button onClick="{{ o.onClick }}" style="height:32px;padding:0 14px;border:none;border-radius:6px;background:{{ o.bg }};color:{{ o.color }};font-size:14px;font-weight:{{ o.weight }};cursor:pointer">{{ o.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:14px;font-weight:600;color:#4a505b">연결된 요청</span>
+                <button onClick="{{ taskGoReq }}" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:1px solid #e4e5e8;border-radius:8px;background:#fafafb;cursor:pointer;text-align:left" style-hover="border-color:#b9bbe6;background:#f7f7fd">
+                  <span style="display:flex;flex-direction:column">
+                    <span style="font-size:15.5px;font-weight:600;color:#1d2026">{{ taskReq.title }}</span>
+                    <span style="font-size:13.5px;color:#6b7280">{{ taskReq.client }} · 근거 요구사항: {{ task.reqText }}</span>
+                  </span>
+                  <span style="color:#4447a8;font-size:14px;flex-shrink:0">요청 보기 →</span>
+                </button>
+              </div>
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:14px;font-weight:600;color:#4a505b">설명</span>
+                <textarea value="{{ task.description }}" onChange="{{ onTaskDesc }}" rows="4" placeholder="작업에 대한 설명을 입력해 주세요" style="padding:10px 12px;border:1px solid #d3d5da;border-radius:8px;font-size:15.5px;line-height:1.6;color:#1d2026;resize:vertical;outline:none" style-focus="border-color:#4447a8;box-shadow:0 0 0 3px #e3e4f8"></textarea>
+              </label>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:14px;font-weight:600;color:#4a505b">완료 조건 <span style="font-weight:500;color:#6b7280">{{ critSummary }}</span></span>
+                <div style="border:1px solid #e4e5e8;border-radius:8px;overflow:hidden">
+                  <sc-for list="{{ critItems }}" as="c" hint-placeholder-count="2">
+                    <div style="display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border-bottom:1px solid #f0f1f3">
+                      <button onClick="{{ c.onToggle }}" aria-label="완료 조건 체크" style="width:20px;height:20px;border-radius:5px;border:1.5px solid {{ c.border }};background:{{ c.bg }};color:#fff;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;margin-top:2px">{{ c.mark }}</button>
+                      <div style="flex:1;font-size:15.5px;color:{{ c.color }};text-decoration:{{ c.deco }}">{{ c.text }}</div>
+                      <button onClick="{{ c.onDelete }}" aria-label="삭제" style="height:26px;padding:0 8px;border:none;border-radius:6px;background:transparent;color:#6b7280;font-size:13px;cursor:pointer" style-hover="background:#fcebea;color:#a3302a">삭제</button>
+                    </div>
+                  </sc-for>
+                  <div style="display:flex;gap:6px;padding:8px">
+                    <input value="{{ newCrit }}" onChange="{{ onNewCrit }}" onKeyDown="{{ onNewCritKey }}" placeholder="완료 조건 추가" style="flex:1;height:36px;padding:0 10px;border:1px solid #d3d5da;border-radius:7px;font-size:15px;outline:none" style-focus="border-color:#4447a8">
+                    <button onClick="{{ addCrit }}" style="height:36px;padding:0 12px;border-radius:7px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:14px;cursor:pointer" style-hover="background:#f3f4f6">추가</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="padding:12px 24px;border-top:1px solid #eeeff1;font-size:13.5px;color:#6b7280">변경 내용은 자동으로 저장돼요.</div>
+          </aside>
+        </sc-if>
+      </div>
+    </sc-if>
+  </main>
+
+  <sc-if value="{{ panelOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(24,26,32,0.32);display:flex;justify-content:flex-end;z-index:20">
+      <div style="width:520px;height:100%;background:#fff;display:flex;flex-direction:column;box-shadow:-8px 0 24px rgba(0,0,0,0.08)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 28px;border-bottom:1px solid #eeeff1">
+          <h2 style="margin:0;font-size:19px;font-weight:700">{{ panelTitle }}</h2>
+          <button onClick="{{ closePanel }}" aria-label="닫기" style="width:32px;height:32px;border:none;border-radius:7px;background:transparent;font-size:18px;color:#4a505b;cursor:pointer" style-hover="background:#f0f1f3">×</button>
+        </div>
+        <div style="flex:1;overflow:auto;padding:24px 28px;display:flex;flex-direction:column;gap:18px">
+          <sc-if value="{{ panel.error }}">
+            <div style="background:#fcebea;border:1px solid #f0c4c0;border-radius:8px;padding:12px 14px;font-size:14.5px;color:#7d2420"><strong>저장하지 못했어요.</strong> 입력한 내용은 그대로 남아 있어요. 잠시 후 다시 시도해 주세요.</div>
+          </sc-if>
+          <sc-if value="{{ isNewPanel }}">
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:14px;color:#4a505b;background:#fafafb;border:1px solid #eeeff1;border-radius:8px;padding:10px 12px">
+              <span>고객이 보낸 내용을 고치지 말고 그대로 붙여 넣어 주세요.</span>
+              <button onClick="{{ fillSample }}" style="border:none;background:none;color:#4447a8;font-size:14px;font-weight:600;cursor:pointer;padding:0;flex-shrink:0">예시 채우기</button>
+            </div>
+          </sc-if>
+          <label style="display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:14.5px;font-weight:600">요청 제목</span>
+            <input value="{{ panel.title }}" onChange="{{ onPanelTitle }}" placeholder="예: 홈페이지 예약 기능 추가" style="height:44px;padding:0 12px;border:1px solid {{ pErr.titleBorder }};border-radius:8px;font-size:16px;color:#1d2026;outline:none" style-focus="border-color:#4447a8;box-shadow:0 0 0 3px #e3e4f8">
+            <sc-if value="{{ pErr.title }}"><span style="font-size:13.5px;color:#a3302a">요청 제목을 입력해 주세요.</span></sc-if>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:14.5px;font-weight:600">고객명</span>
+            <input value="{{ panel.client }}" onChange="{{ onPanelClient }}" placeholder="예: 모닝 스튜디오" style="height:44px;padding:0 12px;border:1px solid {{ pErr.clientBorder }};border-radius:8px;font-size:16px;color:#1d2026;outline:none" style-focus="border-color:#4447a8;box-shadow:0 0 0 3px #e3e4f8">
+            <sc-if value="{{ pErr.client }}"><span style="font-size:13.5px;color:#a3302a">고객명을 입력해 주세요.</span></sc-if>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:14.5px;font-weight:600">요청 원문</span>
+            <textarea value="{{ panel.raw }}" onChange="{{ onPanelRaw }}" rows="9" placeholder="메신저나 이메일로 받은 내용을 그대로 붙여 넣어 주세요." style="padding:12px;border:1px solid {{ pErr.rawBorder }};border-radius:8px;font-size:16px;line-height:1.7;color:#1d2026;resize:vertical;outline:none" style-focus="border-color:#4447a8;box-shadow:0 0 0 3px #e3e4f8"></textarea>
+            <sc-if value="{{ pErr.raw }}"><span style="font-size:13.5px;color:#a3302a">요청 원문을 입력해 주세요.</span></sc-if>
+            <sc-if value="{{ editWithAnalysis }}"><span style="font-size:13.5px;color:#855400">원문을 바꿔도 기존 분석 결과는 자동으로 바뀌지 않아요. 필요한 항목은 직접 수정해 주세요.</span></sc-if>
+          </label>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:16px 28px;border-top:1px solid #eeeff1">
+          <button onClick="{{ closePanel }}" style="height:42px;padding:0 16px;border-radius:8px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:15px;font-weight:500;cursor:pointer" style-hover="background:#f3f4f6">취소</button>
+          <button onClick="{{ submitPanel }}" style="height:42px;padding:0 18px;border-radius:8px;border:1px solid #4447a8;background:#4447a8;color:#fff;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px" style-hover="background:#383b92">{{ panelSpinner }}{{ panelSubmitLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(24,26,32,0.36);display:flex;align-items:center;justify-content:center;z-index:30;padding:32px">
+      <div style="width:760px;max-height:100%;background:#fff;border-radius:14px;display:flex;flex-direction:column;box-shadow:0 20px 48px rgba(0,0,0,0.14)">
+        <div style="padding:22px 28px 16px;border-bottom:1px solid #eeeff1">
+          <h2 style="margin:0;font-size:20px;font-weight:700">작업 만들기</h2>
+          <p style="margin:4px 0 0;font-size:15px;color:#4a505b">확정한 요구사항 {{ drafts.length }}개로 작업을 만들어요. 만들기 전에 제목과 완료 조건을 확인해 주세요.</p>
+        </div>
+        <div style="flex:1;overflow:auto;padding:20px 28px;display:flex;flex-direction:column;gap:14px">
+          <sc-for list="{{ drafts }}" as="d" hint-placeholder-count="3">
+            <div style="border:1px solid #e4e5e8;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+              <div style="font-size:13.5px;color:#4a505b;display:flex;gap:8px;align-items:center"><span style="font-weight:600;color:#3a3d9a;background:#eef0fb;border:1px solid #d3d6f3;border-radius:5px;padding:0 6px;font-size:12.5px">확정</span>요구사항: {{ d.reqText }}</div>
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:14px;font-weight:600">작업 제목</span>
+                <input value="{{ d.title }}" onChange="{{ d.onTitle }}" style="height:42px;padding:0 12px;border:1px solid {{ d.titleBorder }};border-radius:8px;font-size:16px;color:#1d2026;outline:none" style-focus="border-color:#4447a8;box-shadow:0 0 0 3px #e3e4f8">
+                <sc-if value="{{ d.titleErr }}"><span style="font-size:13.5px;color:#a3302a">작업 제목을 입력해 주세요.</span></sc-if>
+              </label>
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:14px;font-weight:600">완료 조건 <span style="font-weight:400;color:#6b7280">· 한 줄에 하나씩</span></span>
+                <textarea value="{{ d.criteria }}" onChange="{{ d.onCriteria }}" rows="3" style="padding:10px 12px;border:1px solid #d3d5da;border-radius:8px;font-size:15.5px;line-height:1.6;color:#1d2026;resize:vertical;outline:none" style-focus="border-color:#4447a8;box-shadow:0 0 0 3px #e3e4f8"></textarea>
+              </label>
+            </div>
+          </sc-for>
+          <div style="border:1.5px dashed #b8bcc5;border-radius:10px;padding:14px 16px;font-size:14.5px;color:#4a505b;line-height:1.6">
+            <strong style="color:#1d2026">작업에 포함되지 않는 내용</strong> · 확인할 질문 {{ excludedQ }}개와 미확정 사항 {{ excludedU }}개는 고객 답변을 받아 요구사항으로 확정한 뒤에 작업으로 만들 수 있어요.
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:16px 28px;border-top:1px solid #eeeff1">
+          <button onClick="{{ closeModal }}" style="height:42px;padding:0 16px;border-radius:8px;border:1px solid #d3d5da;background:#fff;color:#1d2026;font-size:15px;font-weight:500;cursor:pointer" style-hover="background:#f3f4f6">취소</button>
+          <button onClick="{{ createTasks }}" style="height:42px;padding:0 18px;border-radius:8px;border:1px solid #4447a8;background:#4447a8;color:#fff;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#383b92">작업 {{ drafts.length }}개 만들기</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#22252c;color:#fff;border-radius:10px;padding:12px 16px 12px 18px;display:flex;align-items:center;gap:16px;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,0.18);z-index:40">
+      <span>{{ toast.text }}</span>
+      <sc-if value="{{ toast.hasAction }}"><button onClick="{{ toast.onAction }}" style="border:none;background:none;color:#c7c9ff;font-size:15px;font-weight:600;cursor:pointer;padding:0">{{ toast.actionLabel }}</button></sc-if>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const TODAY = '2026.10.20';
+const MORNING = { title: '홈페이지 예약 기능 추가', client: '모닝 스튜디오', raw: '홈페이지에서 촬영 예약을 받았으면 좋겠어요. 가능한 날짜를 보고 신청하게 하고, 예약이 들어오면 제가 확인할 수 있으면 좋겠어요.' };
+let UID = 1000;
+const nid = p => p + '-' + (++UID);
+const ai = (text, extra) => Object.assign({ id: nid('i'), text, source: '', note: '', origin: 'ai', reviewed: false, taskId: null }, extra || {});
+
+function morningAnalysis() {
+  return {
+    reqs: [
+      ai('예약 가능한 날짜 조회', { source: '가능한 날짜를 보고' }),
+      ai('고객의 촬영 예약 신청', { source: '홈페이지에서 촬영 예약을 받았으면 좋겠어요' }),
+      ai('운영자의 예약 내역 확인', { source: '예약이 들어오면 제가 확인할 수 있으면 좋겠어요' })
+    ],
+    questions: [
+      ai('촬영 상품마다 소요 시간이 다른가요?', { note: '날짜 단위로 받을지, 시간 단위로 받을지 정하는 데 필요해요.' }),
+      ai('예약 즉시 확정인가요, 운영자 승인 후 확정인가요?', { note: '‘제가 확인할 수 있으면’이 단순 조회인지 승인 절차인지 원문만으로는 알 수 없어요.' }),
+      ai('결제가 필요한가요?', { note: '원문에 결제 언급이 없어요. 답변 전까지 기능에 넣지 않아요.' })
+    ],
+    unknowns: [
+      ai('로그인 필요 여부', { note: '예약자 정보를 어떻게 받을지 정해지지 않았어요.' }),
+      ai('취소와 변경 규칙', { note: '원문에 언급이 없어요.' }),
+      ai('예약 알림 방식', { note: '‘확인할 수 있으면’이 알림까지 뜻하는지 정해지지 않았어요.' })
+    ]
+  };
+}
+function genericAnalysis(raw) {
+  const sents = raw.split(/(?<=[.!?。])\s+|\n+/).map(s => s.trim().replace(/[.!?。]+$/, '')).filter(Boolean).slice(0, 4);
+  return {
+    reqs: sents.map(s => ai(s, { source: s })),
+    questions: [ai('원하는 완료 시점이 있나요?', { note: '원문에 일정 언급이 없어요.' }), ai('참고할 만한 사이트나 예시가 있나요?', { note: '결과물의 형태를 구체화하는 데 필요해요.' })],
+    unknowns: [ai('적용할 페이지와 기기 범위', { note: '원문만으로는 범위를 특정할 수 없어요.' })]
+  };
+}
+const PRESETS = {
+  '예약 가능한 날짜 조회': { title: '예약 가능한 날짜 조회 화면', criteria: ['고객이 홈페이지에서 예약 가능한 날짜를 볼 수 있다', '예약할 수 없는 날짜는 선택할 수 없게 구분된다'] },
+  '고객의 촬영 예약 신청': { title: '예약 신청 내용 저장', criteria: ['고객이 날짜를 골라 촬영 예약을 신청할 수 있다', '신청한 내용이 저장되고 신청 완료 화면이 보인다'] },
+  '운영자의 예약 내역 확인': { title: '운영자 예약 목록', criteria: ['운영자가 들어온 예약을 목록으로 볼 수 있다', '각 예약의 날짜와 신청 내용을 확인할 수 있다'] }
+};
+function sample() {
+  return {
+    requests: [
+      { id: 'r1', ...MORNING, status: '접수', date: '2026.10.20', analysis: null, analysisState: 'idle' },
+      { id: 'r2', title: '문의 폼 항목 정리', client: '한빛 공방', status: '검토 중', date: '2026.10.17', analysisState: 'done',
+        raw: '문의 폼에 항목이 너무 많아서 사람들이 중간에 나가는 것 같아요. 꼭 필요한 것만 남기고, 연락처는 전화번호나 이메일 중 하나만 받아도 될 것 같아요.',
+        analysis: {
+          reqs: [ai('문의 폼 항목 줄이기', { source: '꼭 필요한 것만 남기고', reviewed: true }), ai('연락처는 전화번호와 이메일 중 하나만 입력받기', { source: '연락처는 전화번호나 이메일 중 하나만 받아도 될 것 같아요' })],
+          questions: [ai('꼭 남겨야 하는 항목은 무엇인가요?', { note: '‘꼭 필요한 것’의 기준이 원문에 없어요.' })],
+          unknowns: [ai('삭제할 항목 목록', { note: '고객 답변 전까지 정할 수 없어요.' })]
+        } },
+      { id: 'r3', title: '메인 배너 문구 변경', client: '소요 카페', status: '확정', date: '2026.10.14', analysisState: 'done',
+        raw: '메인 배너 문구를 ‘가을 신메뉴 출시’로 바꿔 주세요. 버튼은 메뉴 페이지로 연결해 주시고요.',
+        analysis: {
+          reqs: [ai('메인 배너 문구를 ‘가을 신메뉴 출시’로 변경', { source: '메인 배너 문구를 ‘가을 신메뉴 출시’로 바꿔 주세요', reviewed: true, taskId: 't1' }), ai('배너 버튼을 메뉴 페이지로 연결', { source: '버튼은 메뉴 페이지로 연결해 주시고요', reviewed: true, taskId: 't2' })],
+          questions: [ai('기존 배너 이미지는 그대로 사용하나요?', { note: '원문에 이미지 언급이 없어요.', reviewed: true })],
+          unknowns: [ai('변경 적용 날짜', { note: '원문에 일정 언급이 없어요.', reviewed: true })]
+        } }
+    ],
+    tasks: [
+      { id: 't1', title: '메인 배너 문구 교체', requestId: 'r3', reqText: '메인 배너 문구를 ‘가을 신메뉴 출시’로 변경', status: '완료', description: '메인 배너의 문구를 고객이 요청한 문구로 바꿔요.', criteria: [{ id: 'c1', text: '메인 배너에 ‘가을 신메뉴 출시’ 문구가 보인다', done: true }] },
+      { id: 't2', title: '배너 버튼 링크 변경', requestId: 'r3', reqText: '배너 버튼을 메뉴 페이지로 연결', status: '진행 중', description: '배너 버튼을 누르면 메뉴 페이지로 이동하도록 바꿔요.', criteria: [{ id: 'c2', text: '배너 버튼을 누르면 메뉴 페이지로 이동한다', done: false }] }
+    ]
+  };
+}
+const REQ_BADGE = {
+  '접수': { label: '접수', bg: '#f1f2f4', color: '#4a505b' },
+  '검토 중': { label: '검토 중', bg: '#fbf1de', color: '#855400' },
+  '확정': { label: '확정', bg: '#eef0fb', color: '#3a3d9a' }
+};
+const TASK_BADGE = {
+  '할 일': { label: '할 일', bg: '#f1f2f4', color: '#3f4550', border: '#d3d5da' },
+  '진행 중': { label: '진행 중', bg: '#eef0fb', color: '#3a3d9a', border: '#c9ccef' },
+  '완료': { label: '완료', bg: '#e7f3eb', color: '#26683b', border: '#bfdcc8' }
+};
+const LBL = {
+  pending: { text: 'AI 제안 · 검토 전', bg: '#fbf1de', color: '#855400', border: '#ecd3a4' },
+  reviewed: { text: 'AI 제안 · 검토함', bg: '#f1f2f4', color: '#4a505b', border: '#f1f2f4' },
+  edited: { text: '담당자 수정', bg: '#fff', color: '#4a505b', border: '#d3d5da' },
+  added: { text: '담당자 추가', bg: '#fff', color: '#4a505b', border: '#d3d5da' },
+  confirmed: { text: '확정', bg: '#eef0fb', color: '#3a3d9a', border: '#d3d6f3' }
+};
+
+class Component extends DCLogic {
+  state = Object.assign(sample(), {
+    view: 'requests', reqId: null, search: '', filter: 'all', panel: null, hoverSrc: null, editing: null,
+    selected: {}, modal: null, taskFilter: 'all', taskId: null, save: 'saved', failSave: false, failAnalysis: false,
+    toast: null, newCrit: ''
+  });
+
+  cur() { return this.state.requests.find(r => r.id === this.state.reqId); }
+  patchReq(id, fn) { this.setState(s => ({ requests: s.requests.map(r => r.id === id ? fn(r) : r) })); }
+  doSave() {
+    this.setState({ save: 'saving' });
+    clearTimeout(this._st);
+    this._st = setTimeout(() => this.setState(s => ({ save: s.failSave ? 'error' : 'saved' })), 700);
+  }
+  editSec(sec, fn) {
+    const id = this.state.reqId;
+    this.patchReq(id, r => ({ ...r, analysis: { ...r.analysis, [sec]: fn(r.analysis[sec]) } }));
+    this.doSave();
+  }
+  showToast(text, actionLabel, onAction) {
+    clearTimeout(this._tt);
+    this.setState({ toast: { text, actionLabel, onAction, hasAction: !!actionLabel } });
+    this._tt = setTimeout(() => this.setState({ toast: null }), 5000);
+  }
+  openReq(id) { this.setState({ view: 'detail', reqId: id, editing: null, selected: {}, hoverSrc: null }); }
+  goTask(id) { this.setState({ view: 'tasks', taskId: id, taskFilter: 'all', newCrit: '' }); }
+
+  analyze() {
+    const id = this.state.reqId;
+    this.patchReq(id, r => ({ ...r, analysisState: 'loading' }));
+    setTimeout(() => {
+      if (this.state.failAnalysis) {
+        this.setState({ failAnalysis: false });
+        this.patchReq(id, r => ({ ...r, analysisState: 'error' }));
+        return;
+      }
+      this.patchReq(id, r => {
+        const a = r.raw.includes('촬영') && r.raw.includes('예약') ? morningAnalysis() : genericAnalysis(r.raw);
+        return { ...r, analysis: a, analysisState: 'done', status: '검토 중' };
+      });
+      this.doSave();
+    }, 1800);
+  }
+  confirm() {
+    const r = this.cur();
+    const sel = {};
+    r.analysis.reqs.forEach(i => { if (!i.taskId) sel[i.id] = true; });
+    this.patchReq(r.id, x => ({ ...x, status: '확정' }));
+    this.setState({ selected: sel, editing: null });
+    this.doSave();
+    this.showToast('요구사항을 확정했어요. 작업은 아직 만들어지지 않았어요.');
+  }
+  reopen() {
+    this.patchReq(this.state.reqId, x => ({ ...x, status: '검토 중' }));
+    this.setState({ selected: {} });
+    this.doSave();
+  }
+  startEdit(sec, it) { this.setState({ editing: { sec, id: it.id, text: it.text, isNew: false } }); }
+  addItem(sec) {
+    if (this.state.editing) this.commitEdit();
+    const it = { id: nid('i'), text: '', source: '', note: '', origin: 'added', reviewed: true, taskId: null };
+    this.editSec(sec, l => [...l, it]);
+    this.setState({ editing: { sec, id: it.id, text: '', isNew: true } });
+  }
+  commitEdit() {
+    const e = this.state.editing; if (!e) return;
+    const t = e.text.trim();
+    if (!t) { this.cancelEdit(); return; }
+    this.editSec(e.sec, l => l.map(i => i.id === e.id ? { ...i, text: t, origin: i.origin === 'added' ? 'added' : (i.text === t ? i.origin : 'edited'), reviewed: true } : i));
+    this.setState({ editing: null });
+  }
+  cancelEdit() {
+    const e = this.state.editing; if (!e) return;
+    if (e.isNew) this.editSec(e.sec, l => l.filter(i => i.id !== e.id));
+    this.setState({ editing: null });
+  }
+  deleteItem(sec, id) {
+    const list = this.cur().analysis[sec];
+    const idx = list.findIndex(i => i.id === id);
+    const item = list[idx];
+    const reqId = this.state.reqId;
+    this.editSec(sec, l => l.filter(i => i.id !== id));
+    this.showToast('항목을 삭제했어요.', '되돌리기', () => {
+      this.patchReq(reqId, r => { const l = [...r.analysis[sec]]; l.splice(idx, 0, item); return { ...r, analysis: { ...r.analysis, [sec]: l } }; });
+      this.doSave();
+      this.setState({ toast: null });
+    });
+  }
+  review(sec, id) { this.editSec(sec, l => l.map(i => i.id === id ? { ...i, reviewed: true } : i)); }
+
+  openTaskModal() {
+    const r = this.cur();
+    const drafts = r.analysis.reqs.filter(i => this.state.selected[i.id] && !i.taskId).map(i => {
+      const p = PRESETS[i.text] || { title: i.text, criteria: [i.text + ' 기능이 요청대로 동작한다'] };
+      return { reqItemId: i.id, reqText: i.text, title: p.title, criteria: p.criteria.join('\n'), err: false };
+    });
+    this.setState({ modal: { drafts } });
+  }
+  updDraft(idx, k, v) { this.setState(s => ({ modal: { drafts: s.modal.drafts.map((d, i) => i === idx ? { ...d, [k]: v, err: k === 'title' ? false : d.err } : d) } })); }
+  createTasks() {
+    const drafts = this.state.modal.drafts;
+    if (drafts.some(d => !d.title.trim())) {
+      this.setState({ modal: { drafts: drafts.map(d => ({ ...d, err: !d.title.trim() })) } });
+      return;
+    }
+    const r = this.cur();
+    const newTasks = drafts.map(d => ({
+      id: nid('t'), title: d.title.trim(), requestId: r.id, reqText: d.reqText, status: '할 일',
+      description: `요청 ‘${r.title}’에서 확정한 요구사항 ‘${d.reqText}’을 구현해요.`,
+      criteria: d.criteria.split('\n').map(x => x.trim()).filter(Boolean).map(x => ({ id: nid('c'), text: x, done: false }))
+    }));
+    const map = {}; newTasks.forEach((t, i) => { map[drafts[i].reqItemId] = t.id; });
+    this.patchReq(r.id, x => ({ ...x, analysis: { ...x.analysis, reqs: x.analysis.reqs.map(i => map[i.id] ? { ...i, taskId: map[i.id] } : i) } }));
+    this.setState(s => ({ tasks: [...s.tasks, ...newTasks], modal: null, selected: {} }));
+    this.doSave();
+    this.showToast(`작업 ${newTasks.length}개를 만들었어요.`, '작업 보기', () => { this.goTask(newTasks[0].id); this.setState({ toast: null }); });
+  }
+
+  updTask(id, patch) { this.setState(s => ({ tasks: s.tasks.map(t => t.id === id ? { ...t, ...(typeof patch === 'function' ? patch(t) : patch) } : t) })); }
+  addCrit() {
+    const v = this.state.newCrit.trim(); if (!v) return;
+    this.updTask(this.state.taskId, t => ({ criteria: [...t.criteria, { id: nid('c'), text: v, done: false }] }));
+    this.setState({ newCrit: '' });
+  }
+
+  openPanel(mode) {
+    const r = mode === 'edit' ? this.cur() : null;
+    this.setState({ panel: { mode, title: r ? r.title : '', client: r ? r.client : '', raw: r ? r.raw : '', errors: {}, saving: false, error: false } });
+  }
+  setPanel(k, v) { this.setState(s => ({ panel: { ...s.panel, [k]: v, errors: { ...s.panel.errors, [k]: false } } })); }
+  submitPanel() {
+    const p = this.state.panel;
+    if (p.saving) return;
+    const errors = { title: !p.title.trim(), client: !p.client.trim(), raw: !p.raw.trim() };
+    if (errors.title || errors.client || errors.raw) { this.setState({ panel: { ...p, errors } }); return; }
+    this.setState({ panel: { ...p, saving: true, error: false } });
+    setTimeout(() => {
+      if (this.state.failSave) { this.setState(s => ({ panel: { ...s.panel, saving: false, error: true } })); return; }
+      const vals = { title: p.title.trim(), client: p.client.trim(), raw: p.raw.trim() };
+      if (p.mode === 'new') {
+        const r = { id: nid('r'), ...vals, status: '접수', date: TODAY, analysis: null, analysisState: 'idle' };
+        this.setState(s => ({ requests: [r, ...s.requests], panel: null, view: 'detail', reqId: r.id, selected: {}, editing: null, save: 'saved' }));
+        this.showToast('요청을 등록했어요. 분석을 시작해 보세요.');
+      } else {
+        this.patchReq(this.state.reqId, r => ({ ...r, ...vals }));
+        this.setState({ panel: null, save: 'saved' });
+        this.showToast('요청 정보를 저장했어요.');
+      }
+    }, 700);
+  }
+
+  itemsView(sec, r) {
+    const st = this.state, confirmed = r.status === '확정', ed = st.editing;
+    return r.analysis[sec].map((it, idx) => {
+      const isEditing = !!(ed && ed.id === it.id);
+      const sel = !!st.selected[it.id];
+      const selectable = confirmed && sec === 'reqs' && !it.taskId;
+      const needsReview = it.origin === 'ai' && !it.reviewed;
+      const lbl = confirmed && sec === 'reqs' ? LBL.confirmed : it.origin === 'edited' ? LBL.edited : it.origin === 'added' ? LBL.added : needsReview ? LBL.pending : LBL.reviewed;
+      const hl = st.hoverSrc === it.id && it.source;
+      return {
+        ...it, isEditing, notEditing: !isEditing, editText: isEditing ? ed.text : '',
+        hasSource: !!it.source, noSource: sec === 'reqs' && !it.source && !isEditing, hasNote: !!it.note,
+        num: idx + 1, numBg: it.source ? '#eef0fb' : '#f1f2f4', numColor: it.source ? '#3a3d9a' : '#6b7280',
+        needsReview, lbl,
+        hasTask: !!it.taskId, onGoTask: () => this.goTask(it.taskId),
+        canEdit: !confirmed && !isEditing,
+        selectable, checkBg: sel ? '#4447a8' : '#fff', checkBorder: sel ? '#4447a8' : '#a9aeb7', checkMark: sel ? '✓' : '',
+        onToggle: () => this.setState(s => ({ selected: { ...s.selected, [it.id]: !s.selected[it.id] } })),
+        onEnter: () => this.setState({ hoverSrc: it.id }), onLeave: () => this.setState({ hoverSrc: null }),
+        rowBg: hl ? '#f4f4fc' : needsReview ? '#fffbf3' : '#fff',
+        rowBgU: needsReview ? '#fffbf3' : 'transparent',
+        onReview: () => this.review(sec, it.id), onEdit: () => this.startEdit(sec, it), onDelete: () => this.deleteItem(sec, it.id)
+      };
+    });
+  }
+  segments(r) {
+    const raw = r.raw;
+    const plain = t => ({ text: t, bg: 'transparent', border: 'none', hasNum: false, num: '' });
+    if (!r.analysis || r.analysisState !== 'done') return [plain(raw)];
+    const marks = [];
+    r.analysis.reqs.forEach((i, idx) => {
+      if (!i.source) return;
+      const at = raw.indexOf(i.source);
+      if (at >= 0) marks.push({ s: at, e: at + i.source.length, id: i.id, num: idx + 1 });
+    });
+    marks.sort((a, b) => a.s - b.s);
+    const out = []; let pos = 0;
+    marks.forEach(m => {
+      if (m.s < pos) return;
+      if (m.s > pos) out.push(plain(raw.slice(pos, m.s)));
+      const hl = this.state.hoverSrc === m.id;
+      out.push({ text: raw.slice(m.s, m.e), bg: hl ? '#dfe1f8' : 'transparent', border: hl ? '2px solid #4447a8' : '2px solid #c9ccef', hasNum: true, num: m.num });
+      pos = m.e;
+    });
+    if (pos < raw.length) out.push(plain(raw.slice(pos)));
+    return out;
+  }
+
+  renderVals() {
+    const st = this.state;
+    const spinner = React.createElement('span', { style: { width: 14, height: 14, borderRadius: '50%', border: '2px solid #d3d6f3', borderTopColor: '#4447a8', display: 'inline-block', animation: 'rd-spin .8s linear infinite', flexShrink: 0 } });
+    const navOn = { bg: '#eef0fb', color: '#3a3d9a', w: 600 }, navOff = { bg: 'transparent', color: '#1d2026', w: 500 };
+    const rn = st.view === 'tasks' ? navOff : navOn, tn = st.view === 'tasks' ? navOn : navOff;
+
+    const q = st.search.trim().toLowerCase();
+    const filtered = st.requests.filter(r => (st.filter === 'all' || r.status === st.filter) && (!q || (r.title + r.client).toLowerCase().includes(q)));
+    const firstUse = st.requests.length === 0;
+    const filters = [['all', '전체'], ['접수', '접수'], ['검토 중', '검토 중'], ['확정', '확정']].map(([k, label]) => {
+      const on = st.filter === k;
+      return { label, count: k === 'all' ? st.requests.length : st.requests.filter(r => r.status === k).length, onClick: () => this.setState({ filter: k }), bg: on ? '#eef0fb' : 'transparent', color: on ? '#3a3d9a' : '#4a505b', weight: on ? 600 : 500 };
+    });
+    const rows = filtered.map(r => ({ ...r, preview: r.raw, badge: REQ_BADGE[r.status], onOpen: () => this.openReq(r.id) }));
+    const filterLabel = st.filter === 'all' ? '' : `‘${st.filter}’ 상태에서 `;
+    const noResultsTitle = q ? `${filterLabel}‘${st.search.trim()}’에 맞는 요청이 없어요` : `‘${st.filter}’ 상태인 요청이 없어요`;
+
+    const r = st.view === 'detail' ? this.cur() : null;
+    const v = {};
+    if (r) {
+      const a = r.analysis, done = r.analysisState === 'done' && !!a;
+      const confirmed = r.status === '확정';
+      const pend = l => l.filter(i => i.origin === 'ai' && !i.reviewed).length;
+      const sec = l => { const p = pend(l); return { count: l.length, pending: p, hasPending: p > 0 && !confirmed }; };
+      const pending = done ? pend(a.reqs) + pend(a.questions) + pend(a.unknowns) : 0;
+      const selCount = done ? a.reqs.filter(i => st.selected[i.id] && !i.taskId).length : 0;
+      const remaining = done ? a.reqs.filter(i => !i.taskId).length : 0;
+      const reqTasks = st.tasks.filter(t => t.requestId === r.id).map(t => ({ ...t, badge: TASK_BADGE[t.status], onOpen: () => this.goTask(t.id) }));
+
+      let stepIdx = 0, step;
+      const mk = (kind, label, onClick, msg, extra) => Object.assign({ msg, label, onClick, isPrimary: kind === 'primary', isDisabled: kind === 'disabled', isSecondary: kind === 'secondary', hasLink: false, spin: null }, extra || {});
+      if (!done) {
+        if (r.analysisState === 'loading') step = mk('disabled', '분석 중…', null, '원문을 분석하고 있어요. 그동안 원문을 계속 읽을 수 있어요.', { spin: spinner });
+        else if (r.analysisState === 'error') step = mk('primary', '다시 시도', () => this.analyze(), '분석에 실패했어요. 원문은 그대로 남아 있어요.');
+        else step = mk('primary', '요청 분석하기', () => this.analyze(), 'AI가 원문을 요구사항·질문·미확정 사항으로 나눠 제안해요. 제안은 자동으로 확정되지 않아요.');
+      } else if (!confirmed) {
+        stepIdx = 1;
+        if (pending > 0) step = mk('disabled', '검토 완료하고 확정', null, `검토 전 AI 제안이 ${pending}개 남아 있어요. 모두 검토해야 확정할 수 있어요.`);
+        else if (a.reqs.length === 0) step = mk('disabled', '검토 완료하고 확정', null, '확정할 요구사항이 없어요. 요구사항을 추가해 주세요.');
+        else step = mk('primary', '검토 완료하고 확정', () => this.confirm(), '확정하면 요구사항이 고정돼요. 작업은 다음 단계에서 따로 만들어요.');
+      } else if (remaining > 0) {
+        stepIdx = 2;
+        const link = { hasLink: true, linkLabel: '다시 검토하기', onLink: () => this.reopen() };
+        step = selCount > 0
+          ? mk('primary', `작업 만들기 (${selCount})`, () => this.openTaskModal(), `작업으로 만들 요구사항을 선택하세요 · ${selCount}개 선택됨`, link)
+          : mk('disabled', '작업 만들기', null, '작업으로 만들 요구사항을 하나 이상 선택해 주세요.', link);
+      } else {
+        stepIdx = 3;
+        step = mk('secondary', '작업 목록 보기', () => this.setState({ view: 'tasks', taskId: null }), '모든 요구사항을 작업으로 만들었어요.', { hasLink: true, linkLabel: '다시 검토하기', onLink: () => this.reopen() });
+      }
+      const steps = ['분석', '검토·확정', '작업 만들기'].map((label, i) => {
+        const d = i < stepIdx, c = i === stepIdx;
+        return {
+          label, sep: i < 2 ? '›' : '', mark: d ? '✓' : i + 1,
+          weight: c ? 700 : 500, color: c ? '#1d2026' : d ? '#4a505b' : '#6b7280',
+          dotBg: c ? '#4447a8' : d ? '#eef0fb' : '#fff', dotBorder: c ? '#4447a8' : d ? '#c9ccef' : '#c3c6cc', dotColor: c ? '#fff' : d ? '#3a3d9a' : '#6b7280'
+        };
+      });
+
+      Object.assign(v, {
+        req: r, reqBadge: REQ_BADGE[r.status], segments: this.segments(r), hasAnalysis: done,
+        aIdle: r.analysisState === 'idle', aLoading: r.analysisState === 'loading', aError: r.analysisState === 'error', aDone: done,
+        reqItems: done ? this.itemsView('reqs', r) : [], qItems: done ? this.itemsView('questions', r) : [], uItems: done ? this.itemsView('unknowns', r) : [],
+        secReq: done ? sec(a.reqs) : {}, secQ: done ? sec(a.questions) : {}, secU: done ? sec(a.unknowns) : {},
+        unlocked: !confirmed, steps, step,
+        reqTasks, hasReqTasks: reqTasks.length > 0,
+        excludedQ: done ? a.questions.length : 0, excludedU: done ? a.unknowns.length : 0
+      });
+    }
+
+    const tf = st.taskFilter;
+    const tFiltered = st.tasks.filter(t => tf === 'all' || t.status === tf);
+    const taskFilters = [['all', '전체'], ['할 일', '할 일'], ['진행 중', '진행 중'], ['완료', '완료']].map(([k, label]) => {
+      const on = tf === k;
+      return { label, count: k === 'all' ? st.tasks.length : st.tasks.filter(t => t.status === k).length, onClick: () => this.setState({ taskFilter: k }), bg: on ? '#eef0fb' : 'transparent', color: on ? '#3a3d9a' : '#4a505b', weight: on ? 600 : 500 };
+    });
+    const reqOf = id => st.requests.find(x => x.id === id) || { title: '삭제된 요청', client: '' };
+    const taskRows = tFiltered.map(t => {
+      const rq = reqOf(t.requestId), sel = st.taskId === t.id;
+      return {
+        ...t, badge: TASK_BADGE[t.status], reqTitle: rq.title, reqClient: rq.client,
+        critDone: t.criteria.filter(c => c.done).length, critTotal: t.criteria.length,
+        deco: t.status === '완료' ? 'line-through' : 'none', titleColor: t.status === '완료' ? '#6b7280' : '#1d2026',
+        rowBg: sel ? '#f5f5fd' : '#fff', rowShadow: sel ? 'inset 3px 0 0 #4447a8' : 'none',
+        onOpen: () => this.setState({ taskId: t.id, newCrit: '' }),
+        onReq: e => { e.stopPropagation(); this.openReq(t.requestId); },
+        onStatus: e => this.updTask(t.id, { status: e.target.value })
+      };
+    });
+    const task = st.view === 'tasks' ? st.tasks.find(t => t.id === st.taskId) : null;
+    const tv = {};
+    if (task) {
+      Object.assign(tv, {
+        task, taskReq: reqOf(task.requestId),
+        taskStatusOpts: ['할 일', '진행 중', '완료'].map(s => {
+          const on = task.status === s, b = TASK_BADGE[s];
+          return { label: s, onClick: () => this.updTask(task.id, { status: s }), bg: on ? b.bg : 'transparent', color: on ? b.color : '#4a505b', weight: on ? 600 : 500 };
+        }),
+        critItems: task.criteria.map(c => ({
+          ...c, bg: c.done ? '#26683b' : '#fff', border: c.done ? '#26683b' : '#a9aeb7', mark: c.done ? '✓' : '',
+          color: c.done ? '#6b7280' : '#1d2026', deco: c.done ? 'line-through' : 'none',
+          onToggle: () => this.updTask(task.id, t => ({ criteria: t.criteria.map(x => x.id === c.id ? { ...x, done: !x.done } : x) })),
+          onDelete: () => this.updTask(task.id, t => ({ criteria: t.criteria.filter(x => x.id !== c.id) }))
+        })),
+        critSummary: `${task.criteria.filter(c => c.done).length}/${task.criteria.length}`
+      });
+    }
+
+    const p = st.panel;
+    const m = st.modal;
+    return {
+      goRequests: () => this.setState({ view: 'requests', reqId: null }),
+      goTasks: () => this.setState({ view: 'tasks', taskId: null }),
+      nav: { reqBg: rn.bg, reqColor: rn.color, reqWeight: rn.w, taskBg: tn.bg, taskColor: tn.color, taskWeight: tn.w, reqCount: st.requests.length, taskCount: st.tasks.length },
+      failAnalysis: st.failAnalysis, failSave: st.failSave,
+      toggleFailAnalysis: () => this.setState(s => ({ failAnalysis: !s.failAnalysis })),
+      toggleFailSave: () => this.setState(s => ({ failSave: !s.failSave })),
+      resetEmpty: () => this.setState({ requests: [], tasks: [], view: 'requests', reqId: null, taskId: null, search: '', filter: 'all', taskFilter: 'all' }),
+      resetSample: () => this.setState({ ...sample(), view: 'requests', reqId: null, taskId: null, search: '', filter: 'all', taskFilter: 'all', save: 'saved', selected: {}, editing: null }),
+      isRequests: st.view === 'requests', isDetail: st.view === 'detail' && !!r, isTasks: st.view === 'tasks',
+      openNew: () => this.openPanel('new'), openEdit: () => this.openPanel('edit'),
+      hasRequests: !firstUse, search: st.search, onSearch: e => this.setState({ search: e.target.value }),
+      filters, rows, showTable: filtered.length > 0, noResults: !firstUse && filtered.length === 0, noResultsTitle, firstUse,
+      clearSearch: () => this.setState({ search: '', filter: 'all' }),
+      spinner,
+      saveOk: st.save === 'saved', saving: st.save === 'saving', saveErr: st.save === 'error', retrySave: () => this.doSave(),
+      onEditInput: e => this.setState({ editing: { ...st.editing, text: e.target.value } }),
+      onEditKey: e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); this.commitEdit(); } else if (e.key === 'Escape') this.cancelEdit(); },
+      commitEdit: () => this.commitEdit(), cancelEdit: () => this.cancelEdit(),
+      addReq: () => this.addItem('reqs'), addQ: () => this.addItem('questions'), addU: () => this.addItem('unknowns'),
+      ...v,
+      hasTasks: st.tasks.length > 0, noTasks: st.tasks.length === 0, taskFilters, taskRows,
+      showTaskTable: tFiltered.length > 0, taskFilterEmpty: st.tasks.length > 0 && tFiltered.length === 0,
+      taskFilterLabel: tf, taskFilterAll: () => this.setState({ taskFilter: 'all' }),
+      stop: e => e.stopPropagation(),
+      hasTaskDetail: !!task, ...tv,
+      closeTask: () => this.setState({ taskId: null }),
+      taskGoReq: () => task && this.openReq(task.requestId),
+      onTaskTitle: e => this.updTask(task.id, { title: e.target.value }),
+      onTaskDesc: e => this.updTask(task.id, { description: e.target.value }),
+      newCrit: st.newCrit, onNewCrit: e => this.setState({ newCrit: e.target.value }),
+      onNewCritKey: e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) this.addCrit(); },
+      addCrit: () => this.addCrit(),
+      panelOpen: !!p, panel: p || {}, isNewPanel: !!p && p.mode === 'new',
+      panelTitle: p && p.mode === 'edit' ? '요청 정보 수정' : '새 요청 등록',
+      panelSubmitLabel: p && p.saving ? '저장 중…' : (p && p.error ? '다시 시도' : (p && p.mode === 'edit' ? '저장하기' : '등록하기')),
+      panelSpinner: p && p.saving ? spinner : null,
+      editWithAnalysis: !!p && p.mode === 'edit' && !!(this.cur() && this.cur().analysis),
+      pErr: {
+        title: !!(p && p.errors.title), client: !!(p && p.errors.client), raw: !!(p && p.errors.raw),
+        titleBorder: p && p.errors.title ? '#a3302a' : '#d3d5da', clientBorder: p && p.errors.client ? '#a3302a' : '#d3d5da', rawBorder: p && p.errors.raw ? '#a3302a' : '#d3d5da'
+      },
+      onPanelTitle: e => this.setPanel('title', e.target.value),
+      onPanelClient: e => this.setPanel('client', e.target.value),
+      onPanelRaw: e => this.setPanel('raw', e.target.value),
+      fillSample: () => this.setState(s => ({ panel: { ...s.panel, ...MORNING, errors: {} } })),
+      closePanel: () => this.setState({ panel: null }),
+      submitPanel: () => this.submitPanel(),
+      modalOpen: !!m,
+      drafts: m ? m.drafts.map((d, i) => ({ ...d, titleErr: d.err, titleBorder: d.err ? '#a3302a' : '#d3d5da', onTitle: e => this.updDraft(i, 'title', e.target.value), onCriteria: e => this.updDraft(i, 'criteria', e.target.value) })) : [],
+      closeModal: () => this.setState({ modal: null }),
+      createTasks: () => this.createTasks(),
+      hasToast: !!st.toast, toast: st.toast || {}
+    };
+  }
+}
+</script>
+</body>
+</html>
