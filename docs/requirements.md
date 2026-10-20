@@ -36,6 +36,7 @@ Codex 등 독립 검수자가 "요구사항 → 구현 → 검증"을 따라갈 
 | R-UI-01 | B 디자인(README) 레이아웃·색·문구, 한국어, 제작 도구 UI 제외 | `web/src/*`, `styles.css` | 화면 확인(보고서 참조) — 픽셀 단위 비교는 **미검증** |
 | R-UI-02 | 좁은 화면에서 잘라내지 않고 세로 배치 | `styles.css` `@media (max-width:1000px)` | E2E-10 |
 | R-UI-03 | 상태를 색뿐 아니라 텍스트로 표시, 키보드·라벨·포커스 | `ui.tsx`, `styles.css`, `aria-*` | E2E-11(일부). 스크린 리더 실측은 **미검증** |
+| R-SEC-01 | 무인증 로컬 서버 보호: 127.0.0.1 바인딩 + Host 검사(DNS 리바인딩), Origin 허용 목록, Sec-Fetch-Site, JSON 이 아닌 본문 거부 | `server/app.ts` `/api/*` 미들웨어, `server/index.ts` | `security.test.ts` 5개, 실행 중인 서버에 직접 요청(403/415/201 확인) |
 | R-DATA-01 | 요청 삭제 불가, 질문/미확정 상태 값 CHECK | 마이그레이션 | `db.test.ts` |
 | R-DATA-02 | 샘플 데이터(모닝 스튜디오 등)가 §8 과 일치하고 원문에 없는 기능을 넣지 않음 | `server/db/seed.ts` | `db.test.ts` [R-DATA-02] |
 

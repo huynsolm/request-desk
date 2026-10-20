@@ -1,4 +1,4 @@
-﻿import { defineConfig } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
 
 // 蹂꾨룄 ?ы듃/DB(data/e2e.db)瑜??⑥꽌 媛쒕컻 ?곗씠?곗? ?욎씠吏 ?딄쾶 ?쒕떎.
 // 釉뚮씪?곗? ?ㅼ슫濡쒕뱶瑜??쇳븯?ㅺ퀬 ?ㅼ튂??Chrome???ъ슜?쒕떎(channel: 'chrome').
@@ -13,7 +13,7 @@ export default defineConfig({
     {
       command: 'npx tsx server/index.ts',
       url: 'http://127.0.0.1:3199/api/health',
-      env: { API_PORT: '3199', DB_PATH: 'data/e2e.db', E2E_RESET: '1' },
+      env: { API_PORT: '3199', DB_PATH: 'data/e2e.db', E2E_RESET: '1', ALLOWED_ORIGINS: 'http://localhost:5199' },
       reuseExistingServer: false,
       timeout: 30000,
     },
