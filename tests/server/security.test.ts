@@ -26,7 +26,8 @@ describe('로컬 서버 접근 검사', () => {
     const res = await post(a, { 'content-type': 'application/json', origin: 'https://evil.example' });
     expect(res.status).toBe(403);
     expect((await res.json()).code).toBe('forbidden_origin');
-    // 같은 로컬 호스트라도 허용 목록에 없는 포트(다른 로컬 앱)는 거부
+    // 같은 로컬 호스트라도 허용 목록에 없는 포트의 웹 앱(브라우저가 보내는 Origin)은 거부.
+    // 주의: Origin 이 없는 비브라우저 요청(curl·로컬 스크립트)은 막지 않는다 — 위 '출처 없는 호출' 테스트 참고.
     expect((await post(a, { 'content-type': 'application/json', origin: 'http://localhost:9999' })).status).toBe(403);
     expect((await post(a, { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' })).status).toBe(403);
     const list = await (await a.request('/api/requests')).json();
