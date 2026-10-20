@@ -43,10 +43,12 @@ export function RequestDetailPage() {
   const formRef = useRef<FormState | null>(null);
   formRef.current = form;
   const commitFormRef = useRef<() => Promise<void>>(async () => {});
+  const dRef = useRef<RequestDetail | null>(null);
 
   const reload = useCallback(async () => {
     try {
       const data = await api.getRequest(id);
+      dRef.current = data; // 바로 이어지는 코드가 최신 항목 version 을 읽을 수 있게 즉시 보관
       setD(data);
       setLoadError(null);
     } catch (e) {
@@ -141,8 +143,18 @@ export function RequestDetailPage() {
   };
   const startNew = (kind: ItemKind) => openForm({ mode: 'new', kind, text: '', text2: '' });
   const startEdit = (i: AnalysisItem) =>
-    openForm({ mode: 'edit', itemId: i.id, kind: i.kind, text: i.content, text2: i.quote ?? '', base: i.content, base2: i.quote ?? '' });
-  const startResolve = (i: AnalysisItem) => openForm({ mode: 'resolve', itemId: i.id, kind: i.kind, text: i.resolutionText ?? '', text2: '' });
+    openForm({
+      mode: 'edit',
+      itemId: i.id,
+      kind: i.kind,
+      text: i.content,
+      text2: i.quote ?? '',
+      base: i.content,
+      base2: i.quote ?? '',
+      baseVersion: i.version,
+    });
+  const startResolve = (i: AnalysisItem) =>
+    openForm({ mode: 'resolve', itemId: i.id, kind: i.kind, text: i.resolutionText ?? '', text2: '', baseVersion: i.version });
   const startConvert = (i: AnalysisItem) =>
     openForm({
       mode: 'convert',
@@ -150,6 +162,7 @@ export function RequestDetailPage() {
       kind: i.kind,
       text: '',
       text2: `${i.kind === 'question' ? '고객 답변' : '결정'}: ${i.resolutionText ?? ''}`,
+      baseVersion: i.version,
     });
   const cancelForm = () => {
     saver.dismiss('form');
@@ -187,28 +200,44 @@ export function RequestDetailPage() {
     };
     const failMsg = (e: ApiError) =>
       e.retryable ? '저장하지 못했어요. 입력한 내용은 그대로 남아 있어요.' : (e.fieldErrors?.quote ?? e.fieldErrors?.content ?? e.message);
+    /** 실패 처리. 그 사이 항목이 바뀌어 충돌(409)이면 입력은 그대로 두고, 최신 version 으로 다시 적용할 수 있게 한다. */
+    const onFail = (e: ApiError, itemId?: string) => {
+      if (e.code === 'version_conflict') {
+        const fresh = itemId ? dRef.current?.items.find((i) => i.id === itemId) : undefined;
+        patchForm({
+          busy: false,
+          baseVersion: fresh?.version,
+          error: '다른 곳에서 먼저 바뀐 항목이에요. 입력한 내용은 그대로 두었어요. 바꾼 부분만 저장하려면 한 번 더 ‘적용’을 눌러 주세요.',
+        });
+      } else patchForm({ busy: false, error: failMsg(e) });
+    };
 
     if (f.mode === 'edit') {
       const item = items.find((i) => i.id === f.itemId);
       if (!item) return cancelForm();
-      // 사용자가 고치지 않았다면(열었을 때의 값 그대로) 저장하지 않는다. 그 사이 서버에서 바뀐 최신 내용을
-      // 열 때의 오래된 값으로 덮어쓰지 않기 위해서다.
-      if (f.text === f.base && f.text2 === (f.base2 ?? '')) return cancelForm();
-      const quote = f.text2.trim() || null;
-      const quoteChanged = item.kind === 'requirement' && quote !== (item.quote ?? null);
-      if (text === item.content && !quoteChanged) return cancelForm();
+      // 창을 열었을 때의 값(base)과 비교해 사용자가 실제로 고친 필드만 저장한다. 고치지 않은 필드는 보내지 않으므로
+      // 그 사이 서버에서 바뀐 최신 내용을 열 때의 오래된 값으로 덮어쓰지 않는다.
+      const quoteVal = f.text2.trim() || null;
+      const contentChanged = f.text !== f.base;
+      const quoteChanged = item.kind === 'requirement' && quoteVal !== ((f.base2 ?? '').trim() || null);
+      if (!contentChanged && !quoteChanged) return cancelForm();
       patchForm({ busy: true, error: undefined });
       const r = await mutate(
         'form',
-        () => api.updateItem(item.id, { version: item.version, content: text, ...(quoteChanged ? { quote } : {}) }),
+        () =>
+          api.updateItem(item.id, {
+            version: f.baseVersion ?? item.version, // 창을 열 때 본 버전. 그 사이 바뀌었으면 서버가 충돌로 알려준다.
+            ...(contentChanged ? { content: text } : {}),
+            ...(quoteChanged ? { quote: quoteVal } : {}),
+          }),
         finish,
         retry,
       );
-      if (!r.ok) patchForm({ busy: false, error: failMsg(r.error) });
+      if (!r.ok) onFail(r.error, item.id);
     } else if (f.mode === 'new') {
       patchForm({ busy: true, error: undefined });
       const r = await mutate('form', () => api.addItem(id, { kind: f.kind, content: text }), finish, retry);
-      if (!r.ok) patchForm({ busy: false, error: failMsg(r.error) });
+      if (!r.ok) onFail(r.error);
     } else if (f.mode === 'resolve') {
       const item = items.find((i) => i.id === f.itemId);
       if (!item) return cancelForm();
@@ -218,11 +247,16 @@ export function RequestDetailPage() {
       patchForm({ busy: true, error: undefined });
       const r = await mutate(
         'form',
-        () => api.resolveItem(item.id, { version: item.version, resolution: item.kind === 'question' ? 'answered' : 'decided', text }),
+        () =>
+          api.resolveItem(item.id, {
+            version: f.baseVersion ?? item.version,
+            resolution: item.kind === 'question' ? 'answered' : 'decided',
+            text,
+          }),
         finish,
         retry,
       );
-      if (!r.ok) patchForm({ busy: false, error: failMsg(r.error) });
+      if (!r.ok) onFail(r.error, item.id);
     } else if (f.mode === 'convert') {
       const item = items.find((i) => i.id === f.itemId);
       if (!item) return cancelForm();
@@ -232,14 +266,14 @@ export function RequestDetailPage() {
       patchForm({ busy: true, error: undefined });
       const r = await mutate(
         'form',
-        () => api.convertItem(item.id, { version: item.version, content: text, basis: f.text2.trim() }),
+        () => api.convertItem(item.id, { version: f.baseVersion ?? item.version, content: text, basis: f.text2.trim() }),
         () => {
           finish();
           toast('요구사항으로 반영했어요. 검토한 뒤 확정할 수 있어요.');
         },
         retry,
       );
-      if (!r.ok) patchForm({ busy: false, error: failMsg(r.error) });
+      if (!r.ok) onFail(r.error, item.id);
     }
   }
   commitFormRef.current = commitForm;

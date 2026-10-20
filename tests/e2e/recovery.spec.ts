@@ -320,3 +320,87 @@ test('[E2E-R2] 항목 수정 창을 연 뒤 서버에서 그 항목이 바뀌어
   const after = (await (await request.get(`/api/requests/${rid}`)).json()).items.find((i: any) => i.id === itemId);
   expect(after.content).toBe('외부에서 바꾼 요구사항 내용');
 });
+
+// ───── 4차 재검수(836b4ea) R3·R4 ─────
+async function slowPatch(page: Page, ms: number) {
+  await page.route('**/api/tasks/*', async (route) => {
+    if (route.request().method() === 'PATCH') await new Promise((r) => setTimeout(r, ms));
+    await route.continue();
+  });
+}
+
+test('[E2E-R3] 제목 저장이 진행 중일 때 원래 값으로 되돌리면 마지막 입력(원래 값)이 저장된다', async ({ page, request }) => {
+  const { taskId } = await requestTaskWith(request, 'R3 제목 되돌리기', ['고객이 예약 가능한 날짜를 볼 수 있다']);
+  await page.goto(`/tasks/${taskId}`);
+  const panel = page.getByRole('complementary', { name: '작업 상세' });
+  const original = await panel.getByLabel('작업 제목').inputValue();
+  await slowPatch(page, 1200);
+  const firstSaved = page.waitForResponse((r) => r.request().method() === 'PATCH' && r.url().includes('/api/tasks/'));
+  await panel.getByLabel('작업 제목').fill('임시로 바꾼 제목');
+  await panel.getByLabel('작업 제목').blur(); // 저장 요청이 진행 중
+  await panel.getByLabel('작업 제목').fill(original); // 진행 중에 원래 값으로 되돌림
+  await panel.getByLabel('작업 제목').blur();
+  await firstSaved; // 첫 저장(임시 제목)이 끝난 뒤의 서버 상태를 본다
+  expect((await (await request.get(`/api/tasks/${taskId}`)).json()).title).toBe('임시로 바꾼 제목');
+  // 그 뒤 마지막 입력(원래 값)이 저장되어야 한다. 저장이 누락되면 서버는 임시 제목에 머문다.
+  await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).title, { timeout: 15000 }).toBe(original);
+  await expect(panel.getByLabel('작업 제목')).toHaveValue(original);
+  await expect(panel.getByText('저장하지 못했어요.')).toHaveCount(0);
+});
+
+test('[E2E-R3] 설명 저장이 진행 중일 때 원래 값으로 되돌려도 마지막 입력이 저장된다', async ({ page, request }) => {
+  const { taskId } = await requestTaskWith(request, 'R3 설명 되돌리기', ['고객이 예약 가능한 날짜를 볼 수 있다']);
+  await page.goto(`/tasks/${taskId}`);
+  const panel = page.getByRole('complementary', { name: '작업 상세' });
+  await expect(panel.getByLabel('설명')).not.toHaveValue('');
+  const original = await panel.getByLabel('설명').inputValue();
+  await slowPatch(page, 1200);
+  const firstSaved = page.waitForResponse((r) => r.request().method() === 'PATCH' && r.url().includes('/api/tasks/'));
+  await panel.getByLabel('설명').fill('임시로 바꾼 설명');
+  await panel.getByLabel('설명').blur();
+  await panel.getByLabel('설명').fill(original);
+  await panel.getByLabel('설명').blur();
+  await firstSaved;
+  expect((await (await request.get(`/api/tasks/${taskId}`)).json()).description).toBe('임시로 바꾼 설명');
+  await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).description, { timeout: 15000 }).toBe(original);
+  await expect(panel.getByLabel('설명')).toHaveValue(original);
+});
+
+test('[E2E-R3] 저장 중에 다른 값으로 계속 고쳐도 마지막 입력이 저장되고 사라지지 않는다', async ({ page, request }) => {
+  const { taskId } = await requestTaskWith(request, 'R3 연속 수정', ['고객이 예약 가능한 날짜를 볼 수 있다']);
+  await page.goto(`/tasks/${taskId}`);
+  const panel = page.getByRole('complementary', { name: '작업 상세' });
+  await slowPatch(page, 1000);
+  for (const v of ['첫 번째 제목', '두 번째 제목', '세 번째 최종 제목']) {
+    await panel.getByLabel('작업 제목').fill(v);
+    await panel.getByLabel('작업 제목').blur();
+  }
+  await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).title, { timeout: 20000 }).toBe('세 번째 최종 제목');
+  await expect(panel.getByLabel('작업 제목')).toHaveValue('세 번째 최종 제목');
+});
+
+test('[E2E-R4] 수정 창에서 인용문만 고쳐도, 그 사이 서버에서 바뀐 본문은 덮어쓰지 않는다(충돌 안내 후 바꾼 부분만 저장)', async ({ page, request }) => {
+  const { rid, itemId } = await newRequestWithItem(request, 'R4 인용문만 수정', '가능한 날짜를 보고');
+  await post(request, `/api/requests/${rid}/items`, { kind: 'requirement', content: '다른 요구사항 항목' });
+  await page.goto(`/requests/${rid}`);
+  await page.getByRole('button', { name: '수정: 예약 가능한 날짜 조회' }).click(); // 창을 연다(본문은 고치지 않음)
+  // 다른 곳에서 이 항목의 본문을 먼저 바꾼다.
+  const cur = (await (await request.get(`/api/requests/${rid}`)).json()).items.find((i: any) => i.id === itemId);
+  const ext = await request.patch(`/api/items/${itemId}`, { data: { version: cur.version, content: '외부에서 바꾼 요구사항 본문' } });
+  expect(ext.ok()).toBeTruthy();
+  // 다른 항목을 삭제해 화면을 새로 불러오게 한다(수정 창은 열려 있다 → 최신 버전이 로드됨).
+  await page.getByRole('button', { name: '삭제: 다른 요구사항 항목' }).click();
+  await expect(page.getByText('항목을 삭제했어요.')).toBeVisible();
+  // 인용문만 고친다.
+  await page.getByRole('textbox', { name: '원문 근거' }).fill('예약이 들어오면 제가 확인할 수 있으면 좋겠어요');
+  await page.getByRole('button', { name: '적용', exact: true }).click();
+  await expect(page.getByText('다른 곳에서 먼저 바뀐 항목이에요.')).toBeVisible(); // 조용히 덮어쓰지 않고 알려준다
+  let item = (await (await request.get(`/api/requests/${rid}`)).json()).items.find((i: any) => i.id === itemId);
+  expect(item.content).toBe('외부에서 바꾼 요구사항 본문');
+  expect(item.quote).toBe('가능한 날짜를 보고'); // 아직 저장되지 않았다
+  // 확인하고 한 번 더 적용하면 바꾼 필드(인용문)만 저장된다. 본문은 외부에서 바뀐 값 그대로.
+  await page.getByRole('button', { name: '적용', exact: true }).click();
+  await expect.poll(async () => (await (await request.get(`/api/requests/${rid}`)).json()).items.find((i: any) => i.id === itemId).quote).toBe('예약이 들어오면 제가 확인할 수 있으면 좋겠어요');
+  item = (await (await request.get(`/api/requests/${rid}`)).json()).items.find((i: any) => i.id === itemId);
+  expect(item.content).toBe('외부에서 바꾼 요구사항 본문');
+});

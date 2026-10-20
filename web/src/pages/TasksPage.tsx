@@ -184,6 +184,11 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
   editCritRef.current = editCrit;
   // 사용자가 "실제로 입력한" 필드. 오래된 화면값(서버가 먼저 바뀐 경우)과 사용자의 수정 초안을 구분한다.
   const dirtyRef = useRef({ title: false, desc: false });
+  // 저장 요청이 진행 중(또는 줄 서 있는)인 값. "서버에 있는 값"이 아니라 "곧 서버에 있게 될 값"과 비교해야
+  // 저장 중에 원래 값으로 되돌린 입력이 사라지지 않는다.
+  const sentRef = useRef<{ title?: string; desc?: string }>({});
+  // 작업 저장을 한 줄로 세운다: 앞의 저장이 끝난 뒤(최신 version 을 받은 뒤) 다음 저장을 보낸다.
+  const chainRef = useRef<Promise<unknown>>(Promise.resolve());
 
   /**
    * 서버 응답을 화면에 반영한다. 입력 중인 제목·설명 초안은 덮어쓰지 않는다.
@@ -217,34 +222,69 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
       .catch((e: ApiError) => setErr(e.code === 'not_found' ? '작업을 찾을 수 없어요.' : '작업을 불러오지 못했어요.'));
   }, [taskId]);
 
+  /** 초안과 서버 값이 같고 줄 서 있는 저장도 없으면 "고친 상태"가 아니다. */
+  const settleDirty = () => {
+    const cur = tRef.current;
+    if (!cur) return;
+    if (titleRef.current.trim() === cur.title && sentRef.current.title === undefined) dirtyRef.current.title = false;
+    if (descRef.current === cur.description && sentRef.current.desc === undefined) dirtyRef.current.desc = false;
+  };
+
   /**
    * 작업 변경 저장. build 는 실행하는 시점에 호출되어 그때의 최신 초안으로 패치를 만든다(다시 저장 때도 마찬가지).
-   * 성공 응답은 최초 실행과 재시도 모두 같은 경로로 반영되므로 version 이 항상 최신으로 유지된다.
-   * 충돌(409, 다른 곳에서 먼저 바뀜)이면 최신 서버 상태만 받아 오고 저장 실패 상태를 유지한다:
-   * 사용자의 초안은 그대로 남고, "다시 저장"을 누르면 최신 버전으로 지금 입력을 저장한다.
+   * - 저장은 한 줄로 실행된다(chainRef). 앞의 저장 응답으로 최신 version 을 받은 뒤 다음 저장이 나간다.
+   * - 성공 응답은 최초 실행과 재시도 모두 같은 경로로 반영되므로 version 이 항상 최신으로 유지된다.
+   * - 충돌(409, 다른 곳에서 먼저 바뀜)이면 최신 서버 상태만 받아 오고 저장 실패 상태를 유지한다:
+   *   사용자의 초안은 그대로 남고, "다시 저장"을 누르면 최신 버전으로 지금 입력을 저장한다.
    */
   const save = async (key: string, build: () => { title?: string; description?: string; status?: TaskStatus } | null) => {
-    await saver.track(key, async () => {
-      const cur = tRef.current;
-      const patch = build();
-      if (!cur || !patch) return null;
-      try {
-        const d = await api.updateTask(cur.id, { version: cur.version, ...patch });
-        // 저장한 내용과 지금 입력이 같으면 더는 "고친 상태"가 아니다. 저장하는 동안 더 입력했다면 계속 고친 상태로 둔다.
-        if (patch.title !== undefined && titleRef.current.trim() === patch.title) dirtyRef.current.title = false;
-        if (patch.description !== undefined && descRef.current === patch.description) dirtyRef.current.desc = false;
-        applyKeepDrafts(d);
-        onChanged();
-        notifyChanged();
-        return d;
-      } catch (e) {
-        if (e instanceof ApiError && e.code === 'version_conflict') {
-          const fresh = await api.getTask(cur.id).catch(() => null);
-          if (fresh) applyKeepDrafts(fresh);
-          throw new ApiError(0, 'conflict_retry', '다른 곳에서 먼저 바뀐 내용이에요. 다시 저장하면 지금 입력한 내용으로 덮어써요.');
+    await saver.track(key, () => {
+      const exec = async () => {
+        const cur = tRef.current;
+        const raw = build();
+        const clearSent = () => {
+          if (raw?.title !== undefined && sentRef.current.title === raw.title) delete sentRef.current.title;
+          if (raw?.description !== undefined && sentRef.current.desc === raw.description) delete sentRef.current.desc;
+        };
+        try {
+          if (!cur || !raw) return null;
+          // 이미 서버에 있는 값이면 보낼 것이 없다.
+          const patch = { ...raw };
+          if (patch.title === cur.title) delete patch.title;
+          if (patch.description === cur.description) delete patch.description;
+          if (patch.status === cur.status) delete patch.status;
+          if (Object.keys(patch).length === 0) {
+            clearSent();
+            settleDirty();
+            return null;
+          }
+          try {
+            const d = await api.updateTask(cur.id, { version: cur.version, ...patch });
+            tRef.current = d; // 다음 저장이 렌더를 기다리지 않고 최신 version 을 쓰도록
+            clearSent();
+            settleDirty(); // 저장한 값과 지금 입력이 같으면 더는 "고친 상태"가 아니다(저장 중 더 입력했다면 그대로 둔다)
+            applyKeepDrafts(d);
+            onChanged();
+            notifyChanged();
+            return d;
+          } catch (e) {
+            if (e instanceof ApiError && e.code === 'version_conflict') {
+              const fresh = await api.getTask(cur.id).catch(() => null);
+              if (fresh) applyKeepDrafts(fresh);
+              throw new ApiError(0, 'conflict_retry', '다른 곳에서 먼저 바뀐 내용이에요. 다시 저장하면 지금 입력한 내용으로 덮어써요.');
+            }
+            throw e;
+          }
+        } finally {
+          clearSent();
         }
-        throw e;
-      }
+      };
+      const p = chainRef.current.then(exec, exec);
+      chainRef.current = p.then(
+        () => undefined,
+        () => undefined,
+      );
+      return p;
     });
   };
 
@@ -376,11 +416,14 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
             onBlur={() => {
               // 사용자가 고치지 않은 칸은 포커스만 옮겨도 저장하지 않는다.
               if (!dirtyRef.current.title) return;
-              if (!title.trim()) return setTitleError('작업 제목을 입력해 주세요.');
-              if (title.trim() === tRef.current?.title) {
-                dirtyRef.current.title = false;
+              const v = titleRef.current.trim();
+              if (!v) return setTitleError('작업 제목을 입력해 주세요.');
+              // 서버 값이 아니라 "저장 중인 값"이 있으면 그것과 비교한다(저장 중에 원래 값으로 되돌려도 저장되도록).
+              if (v === (sentRef.current.title ?? tRef.current?.title)) {
+                if (sentRef.current.title === undefined) dirtyRef.current.title = false;
                 return;
               }
+              sentRef.current.title = v;
               void save('title', () => (titleRef.current.trim() ? { title: titleRef.current.trim() } : null));
             }}
             aria-invalid={!!titleError}
@@ -432,10 +475,12 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
             }}
             onBlur={() => {
               if (!dirtyRef.current.desc) return;
-              if (desc === tRef.current?.description) {
-                dirtyRef.current.desc = false;
+              const v = descRef.current;
+              if (v === (sentRef.current.desc ?? tRef.current?.description)) {
+                if (sentRef.current.desc === undefined) dirtyRef.current.desc = false;
                 return;
               }
+              sentRef.current.desc = v;
               void save('desc', () => ({ description: descRef.current }));
             }}
           />

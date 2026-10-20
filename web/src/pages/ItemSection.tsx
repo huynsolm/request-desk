@@ -10,6 +10,8 @@ export interface FormState {
   /** 수정 창을 열었을 때의 값. 사용자가 실제로 고쳤는지(입력 ≠ 열었을 때의 값)를 판단하는 기준이다. */
   base?: string;
   base2?: string;
+  /** 창을 열 때 본 항목의 version. 저장은 이 버전으로 보내서, 그 사이 항목이 바뀌었으면 충돌로 알려준다. */
+  baseVersion?: number;
   error?: string;
   busy?: boolean;
 }
