@@ -133,7 +133,9 @@ test('[E2E-F3] 기존 완료 조건의 문구를 수정하면 같은 조건(ID·
   expect(after.criteria[0].done).toBe(true); // 완료 상태 유지
   // 마지막 한 개가 남으면 삭제할 수 없다
   await panel.getByRole('button', { name: /^완료 조건 삭제: 두 번째/ }).click();
-  await expect(panel.getByRole('button', { name: /^완료 조건 삭제:/ })).toBeDisabled();
+  // 삭제 결과가 화면에 반영될 때까지(조건 1개만 남을 때까지) 기다린 뒤, 남은 조건의 삭제 버튼이 비활성인지 확인한다.
+  await expect(panel.getByRole('button', { name: /^완료 조건 삭제:/ })).toHaveCount(1);
+  await expect(panel.getByRole('button', { name: '완료 조건 삭제: 첫 번째 완료 조건을 구체적으로 고쳤습니다' })).toBeDisabled();
 });
 
 test('[E2E-F4] 원문이 바뀌어 무효가 된 근거 인용문을 화면에서 고쳐 확정할 수 있다', async ({ page, request }) => {
@@ -241,4 +243,80 @@ test('[E2E-R1] 그 사이 다른 곳에서 작업이 바뀌어 409 가 나면 �
   await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).title).toBe('내가 쓴 제목');
   const t = await (await request.get(`/api/tasks/${taskId}`)).json();
   expect(t.description).toBe('외부에서 바꾼 설명'); // 내가 건드리지 않은 필드는 덮어쓰지 않는다
+});
+
+// ───── 3차 재검수(be7e60d) R2: 건드리지 않은 필드는 충돌 뒤에도 덮어쓰지 않는다 ─────
+test('[E2E-R2] 제목 충돌을 해결한 뒤 건드리지 않은 설명 칸에 포커스만 옮겨도 외부의 최신 설명을 덮어쓰지 않는다', async ({ page, request }) => {
+  const { taskId } = await requestTaskWith(request, 'R2 미수정 필드', ['고객이 예약 가능한 날짜를 볼 수 있다']);
+  await page.goto(`/tasks/${taskId}`);
+  const panel = page.getByRole('complementary', { name: '작업 상세' });
+  await expect(panel.getByLabel('설명')).not.toHaveValue('');
+  // 다른 곳에서 설명을 먼저 바꾼다(화면은 아직 예전 설명을 보여준다).
+  const cur = await (await request.get(`/api/tasks/${taskId}`)).json();
+  const ext = await request.patch(`/api/tasks/${taskId}`, { data: { version: cur.version, description: '외부에서 갱신한 최신 설명' } });
+  expect(ext.ok()).toBeTruthy();
+  // 제목만 고친다 → 409 충돌 안내 + 다시 저장
+  await panel.getByLabel('작업 제목').fill('내가 고친 제목');
+  await panel.getByLabel('작업 제목').blur();
+  await expect(panel.getByText('다른 곳에서 먼저 바뀐 내용이에요. 다시 저장하면 지금 입력한 내용으로 덮어써요.')).toBeVisible();
+  await panel.getByRole('button', { name: '다시 저장' }).click();
+  await expect(panel.getByText('저장하지 못했어요.')).toHaveCount(0);
+  // 건드리지 않은 설명 칸은 서버의 최신 값으로 맞춰져 있어야 한다.
+  await expect(panel.getByLabel('설명')).toHaveValue('외부에서 갱신한 최신 설명');
+  // 설명 칸에 포커스를 넣었다 빼도 아무것도 저장되지 않는다(서버 설명이 그대로).
+  const patches: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'PATCH' && r.url().includes('/api/tasks/')) patches.push(r.postData() ?? '');
+  });
+  await panel.getByLabel('설명').focus();
+  await panel.getByLabel('작업 제목').focus();
+  await page.waitForTimeout(500);
+  expect(patches).toEqual([]);
+  const t = await (await request.get(`/api/tasks/${taskId}`)).json();
+  expect(t.title).toBe('내가 고친 제목');
+  expect(t.description).toBe('외부에서 갱신한 최신 설명');
+});
+
+test('[E2E-R2] 충돌이 나도 사용자가 실제로 고친 설명 초안은 보존되고 저장된다', async ({ page, request }) => {
+  const { taskId } = await requestTaskWith(request, 'R2 수정한 필드', ['고객이 예약 가능한 날짜를 볼 수 있다']);
+  await page.goto(`/tasks/${taskId}`);
+  const panel = page.getByRole('complementary', { name: '작업 상세' });
+  await expect(panel.getByLabel('설명')).not.toHaveValue('');
+  const cur = await (await request.get(`/api/tasks/${taskId}`)).json();
+  await request.patch(`/api/tasks/${taskId}`, { data: { version: cur.version, title: '외부에서 바꾼 제목' } });
+  // 사용자가 설명을 고친다 → 409 → 안내가 보이고 초안은 그대로
+  await panel.getByLabel('설명').fill('내가 고친 설명 초안');
+  await panel.getByLabel('설명').blur();
+  await expect(panel.getByText('다른 곳에서 먼저 바뀐 내용이에요. 다시 저장하면 지금 입력한 내용으로 덮어써요.')).toBeVisible();
+  await expect(panel.getByLabel('설명')).toHaveValue('내가 고친 설명 초안');
+  // 건드리지 않은 제목은 서버의 최신 값으로 맞춰진다
+  await expect(panel.getByLabel('작업 제목')).toHaveValue('외부에서 바꾼 제목');
+  await panel.getByRole('button', { name: '다시 저장' }).click();
+  await expect(panel.getByText('저장하지 못했어요.')).toHaveCount(0);
+  const t = await (await request.get(`/api/tasks/${taskId}`)).json();
+  expect(t.description).toBe('내가 고친 설명 초안');
+  expect(t.title).toBe('외부에서 바꾼 제목'); // 내가 건드리지 않은 제목은 덮어쓰지 않았다
+});
+
+test('[E2E-R2] 항목 수정 창을 연 뒤 서버에서 그 항목이 바뀌어도, 고치지 않고 적용하면 최신 내용을 덮어쓰지 않는다', async ({ page, request }) => {
+  const { rid, itemId } = await newRequestWithItem(request, 'R2 항목 입력창');
+  await post(request, `/api/requests/${rid}/items`, { kind: 'requirement', content: '다른 요구사항 항목' });
+  await page.goto(`/requests/${rid}`);
+  await page.getByRole('button', { name: '수정: 예약 가능한 날짜 조회' }).click(); // 수정 창을 연다(내용은 고치지 않음)
+  // 다른 곳에서 이 항목의 내용을 먼저 바꾼다.
+  const cur = (await (await request.get(`/api/requests/${rid}`)).json()).items.find((i: any) => i.id === itemId);
+  const ext = await request.patch(`/api/items/${itemId}`, { data: { version: cur.version, content: '외부에서 바꾼 요구사항 내용' } });
+  expect(ext.ok()).toBeTruthy();
+  // 화면이 새로고침되도록 다른 항목을 삭제한다(수정 창은 열려 있다).
+  await page.getByRole('button', { name: '삭제: 다른 요구사항 항목' }).click();
+  await expect(page.getByText('항목을 삭제했어요.')).toBeVisible();
+  const patches: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'PATCH' && r.url().includes('/api/items/')) patches.push(r.postData() ?? '');
+  });
+  await page.getByRole('button', { name: '적용', exact: true }).click(); // 고치지 않고 적용
+  await page.waitForTimeout(500);
+  expect(patches).toEqual([]);
+  const after = (await (await request.get(`/api/requests/${rid}`)).json()).items.find((i: any) => i.id === itemId);
+  expect(after.content).toBe('외부에서 바꾼 요구사항 내용');
 });

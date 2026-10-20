@@ -6,7 +6,10 @@ export interface FormState {
   itemId?: string;
   kind: ItemKind;
   text: string; // 항목 내용 / 답변·결정 내용 / 전환할 요구사항 내용
-  text2: string; // 전환 근거
+  text2: string; // 전환 근거 / 요구사항 수정 시 원문 근거
+  /** 수정 창을 열었을 때의 값. 사용자가 실제로 고쳤는지(입력 ≠ 열었을 때의 값)를 판단하는 기준이다. */
+  base?: string;
+  base2?: string;
   error?: string;
   busy?: boolean;
 }

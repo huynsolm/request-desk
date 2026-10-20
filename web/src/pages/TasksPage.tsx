@@ -182,6 +182,8 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
   descRef.current = desc;
   const editCritRef = useRef(editCrit);
   editCritRef.current = editCrit;
+  // 사용자가 "실제로 입력한" 필드. 오래된 화면값(서버가 먼저 바뀐 경우)과 사용자의 수정 초안을 구분한다.
+  const dirtyRef = useRef({ title: false, desc: false });
 
   /**
    * 서버 응답을 화면에 반영한다. 입력 중인 제목·설명 초안은 덮어쓰지 않는다.
@@ -191,12 +193,23 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
   const applyKeepDrafts = (d: TaskDetail) => {
     tRef.current = d;
     setT(d);
+    // 사용자가 고치지 않은 칸은 서버의 최신 값으로 맞춘다(오래된 값이 남아 있다가 나중에 덮어쓰는 일을 막는다).
+    // 사용자가 고친 칸(dirty)의 초안만 그대로 둔다.
+    if (!dirtyRef.current.title) {
+      titleRef.current = d.title;
+      setTitle(d.title);
+    }
+    if (!dirtyRef.current.desc) {
+      descRef.current = d.description;
+      setDesc(d.description);
+    }
   };
 
   useEffect(() => {
     api
       .getTask(taskId)
       .then((d) => {
+        dirtyRef.current = { title: false, desc: false };
         setT(d);
         setTitle(d.title);
         setDesc(d.description);
@@ -217,6 +230,9 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
       if (!cur || !patch) return null;
       try {
         const d = await api.updateTask(cur.id, { version: cur.version, ...patch });
+        // 저장한 내용과 지금 입력이 같으면 더는 "고친 상태"가 아니다. 저장하는 동안 더 입력했다면 계속 고친 상태로 둔다.
+        if (patch.title !== undefined && titleRef.current.trim() === patch.title) dirtyRef.current.title = false;
+        if (patch.description !== undefined && descRef.current === patch.description) dirtyRef.current.desc = false;
         applyKeepDrafts(d);
         onChanged();
         notifyChanged();
@@ -353,12 +369,19 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
             style={{ fontSize: 17, fontWeight: 600 }}
             value={title}
             onChange={(e) => {
+              dirtyRef.current.title = true;
               setTitle(e.target.value);
               setTitleError(null);
             }}
             onBlur={() => {
+              // 사용자가 고치지 않은 칸은 포커스만 옮겨도 저장하지 않는다.
+              if (!dirtyRef.current.title) return;
               if (!title.trim()) return setTitleError('작업 제목을 입력해 주세요.');
-              if (title.trim() !== t.title) void save('title', () => (titleRef.current.trim() ? { title: titleRef.current.trim() } : null));
+              if (title.trim() === tRef.current?.title) {
+                dirtyRef.current.title = false;
+                return;
+              }
+              void save('title', () => (titleRef.current.trim() ? { title: titleRef.current.trim() } : null));
             }}
             aria-invalid={!!titleError}
           />
@@ -403,9 +426,17 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
             rows={4}
             style={{ fontSize: 15.5, lineHeight: 1.6 }}
             value={desc}
-            onChange={(e) => setDesc(e.target.value)}
+            onChange={(e) => {
+              dirtyRef.current.desc = true;
+              setDesc(e.target.value);
+            }}
             onBlur={() => {
-              if (desc !== t.description) void save('desc', () => ({ description: descRef.current }));
+              if (!dirtyRef.current.desc) return;
+              if (desc === tRef.current?.description) {
+                dirtyRef.current.desc = false;
+                return;
+              }
+              void save('desc', () => ({ description: descRef.current }));
             }}
           />
         </div>

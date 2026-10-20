@@ -1,5 +1,7 @@
 # Codex 3차 재검수 요청 프롬프트 (R1 수정 확인)
 
+> 3차에서 R2·T1 이 새로 나와 수정했다. 4차 재검수용 프롬프트는 [codex-rereview-4-prompt.md](codex-rereview-4-prompt.md).
+
 아래 블록을 그대로 Codex 에 붙여 넣으세요.
 
 ````text

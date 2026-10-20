@@ -141,7 +141,7 @@ export function RequestDetailPage() {
   };
   const startNew = (kind: ItemKind) => openForm({ mode: 'new', kind, text: '', text2: '' });
   const startEdit = (i: AnalysisItem) =>
-    openForm({ mode: 'edit', itemId: i.id, kind: i.kind, text: i.content, text2: i.quote ?? '' });
+    openForm({ mode: 'edit', itemId: i.id, kind: i.kind, text: i.content, text2: i.quote ?? '', base: i.content, base2: i.quote ?? '' });
   const startResolve = (i: AnalysisItem) => openForm({ mode: 'resolve', itemId: i.id, kind: i.kind, text: i.resolutionText ?? '', text2: '' });
   const startConvert = (i: AnalysisItem) =>
     openForm({
@@ -191,6 +191,9 @@ export function RequestDetailPage() {
     if (f.mode === 'edit') {
       const item = items.find((i) => i.id === f.itemId);
       if (!item) return cancelForm();
+      // 사용자가 고치지 않았다면(열었을 때의 값 그대로) 저장하지 않는다. 그 사이 서버에서 바뀐 최신 내용을
+      // 열 때의 오래된 값으로 덮어쓰지 않기 위해서다.
+      if (f.text === f.base && f.text2 === (f.base2 ?? '')) return cancelForm();
       const quote = f.text2.trim() || null;
       const quoteChanged = item.kind === 'requirement' && quote !== (item.quote ?? null);
       if (text === item.content && !quoteChanged) return cancelForm();
