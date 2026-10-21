@@ -4,7 +4,7 @@
 
 현재 **1단계(AI 없는 핵심 기능)** 가 구현되어 있습니다. 2단계(모의 분석)·3단계(실제 AI)는 아직 없습니다.
 
-> **다른 PC 에서 이어서 작업하려면** [docs/HANDOFF.md](docs/HANDOFF.md) 를 먼저 읽으세요. 현재 작업 브랜치는 `stage-1-review` 이고 원격 `main` 은 비어 있습니다(`git clone -b stage-1-review ...`).
+> **다른 PC 에서 이어서 작업하려면** [docs/HANDOFF.md](docs/HANDOFF.md) 를 먼저 읽으세요. 1단계는 독립 검수를 통과해 `main` 에 병합되었습니다(`git clone -b main ...`).
 
 ## 실행
 
