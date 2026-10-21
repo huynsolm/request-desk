@@ -1,6 +1,6 @@
 # 3단계 보고서 — 실제 AI 연결 (Anthropic Claude API)
 
-브랜치 `stage-3-ai-provider` · 상태: **구현 완료, 독립 검수 대기** (`main` 미병합)
+브랜치 `stage-3-ai-provider` · 상태: **독립 검수 통과, `main` 병합 완료** (`9e99d6f`)
 
 ## 사용자가 정한 것 (2026-10-21)
 - 제공자: Anthropic Claude API · 인증: 서버 전용 `.env` 키 · 비용 상한: 하루 20회 / 한 달 300회

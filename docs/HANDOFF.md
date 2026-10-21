@@ -9,7 +9,7 @@
 | 1단계(AI 없는 핵심 기능) | **구현 완료, 독립 검수 6차까지 통과** (병합 차단 문제 없음) |
 | `main` 병합 | **완료** — 2026-10-21, 검수받은 커밋 `a213429` 를 fast-forward 로 병합·push. 원격 `stage-1-review` 브랜치는 같은 커밋으로 남아 있음 |
 | 2단계(모의 분석 제공자) | **구현 완료, 독립 검수 통과(1차 지적 3건 수정 후 재검수 통과), `main` 병합 완료** — 2026-10-21, 검수받은 커밋 `939aed1` 을 fast-forward 로 병합. 보고서 [reports/stage-2.md](reports/stage-2.md). 원격 `stage-2-mock-analysis` 브랜치는 같은 커밋으로 남아 있음 |
-| 3단계(실제 AI) | **구현 완료, 독립 검수 대기** — 브랜치 `stage-3-ai-provider`(`main` 미병합). Anthropic Claude API · 서버 `.env` 키 · 하루 20회/한 달 300회. 보고서 [reports/stage-3.md](reports/stage-3.md). **실제 API 통신은 미검증**(키 필요 → `npm run ai:smoke`) |
+| 3단계(실제 AI) | **구현 완료, 독립 검수 통과(P2 3건+문구 2건 수정 후 재검수 통과), `main` 병합 완료** — 검수받은 커밋 `9e99d6f`(fast-forward). Anthropic Claude API · 서버 `.env` 키 · 하루 20회/한 달 300회. 보고서 [reports/stage-3.md](reports/stage-3.md). **실제 API 통신은 미검증**(키 필요 → `npm run ai:smoke`) |
 
 검증 상태(`939aed1`): 서버·DB **87개**, E2E **38개**(연속 2회), 타입 검사·빌드 통과. 병합 전에 GitHub 에서 새로 clone 한 사본에서도 `npm ci` → DB 초기화 → 타입 검사 → 테스트 → 빌드 → E2E 가 모두 통과함을 확인했다.
 미검증: 기준 디자인과의 픽셀 단위 일치, 스크린 리더, Chrome 외 브라우저, 한글 IME 실입력. 자세한 내용은 [reports/stage-1.md](reports/stage-1.md).
@@ -48,9 +48,8 @@ npm run build
 
 ## 3. 이어서 할 일 (순서)
 
-1. **3단계 검수·병합**: [codex-review-stage3-lite-prompt.md](codex-review-stage3-lite-prompt.md) 로 독립 검수 → 지적 수정 → 사용자 승인 후 `main` 병합.
-2. **실제 연결 확인(사용자가 직접)**: `.env` 에 `ANALYSIS_PROVIDER=ai`, `ANTHROPIC_API_KEY=...` 를 **직접** 넣고(채팅에 붙여 넣지 말 것) `npm run ai:smoke`(호출 1회, 비용 발생). 모델 이름/구조화 출력이 거부되면 `ANTHROPIC_MODEL` 조정 또는 수정 필요.
-3. 그 뒤 실제 응답 품질(원문 인용 정확도, 원문에 없는 기능 생성 여부)을 샘플 원문 몇 건으로 확인한다.
+1. **실제 연결 확인(사용자가 직접)**: `.env` 에 `ANALYSIS_PROVIDER=ai`, `ANTHROPIC_API_KEY=...` 를 **직접** 넣고(채팅에 붙여 넣지 말 것) `npm run ai:smoke`(호출 1회, 비용 발생). 모델 이름/구조화 출력이 거부되면 `ANTHROPIC_MODEL` 조정 또는 수정 필요.
+2. 그 뒤 실제 응답 품질(원문 인용 정확도, 원문에 없는 기능 생성 여부)을 샘플 원문 몇 건으로 확인한다.
 
 ## 4. 작업 규칙 (사용자 지시, 계속 지킬 것)
 - 한 번에 모든 기능을 만들지 말고 **단계별로** 진행, 단계가 끝나면 실행 가능한 상태로 두고 완료/남은 범위를 보고
