@@ -95,6 +95,12 @@ export function ItemSection(p: SectionProps) {
   const pending = p.items.filter((i) => i.reviewState === 'unreviewed').length;
   const secCls = p.kind === 'undecided' ? 'sec sec-undecided' : 'sec';
   const newForm = p.form && p.form.mode === 'new' && p.form.kind === p.kind ? p.form : null;
+  // 입력창을 열어 둔 항목이 그 사이 다른 곳에서 삭제돼 목록에서 사라졌으면, 입력창이 같이 사라지지 않도록
+  // 안내와 함께 입력한 내용을 그대로 보여준다(조용히 버리지 않는다).
+  const orphan =
+    p.form && p.form.mode !== 'new' && p.form.itemId && p.form.kind === p.kind && !p.items.some((i) => i.id === p.form!.itemId)
+      ? p.form
+      : null;
   return (
     <section className={secCls} aria-labelledby={`sec-${p.kind}`}>
       <div className="sec-head">
@@ -110,6 +116,27 @@ export function ItemSection(p: SectionProps) {
       {p.items.map((it) => (
         <ItemRow key={it.id} item={it} {...p} />
       ))}
+      {orphan && (
+        <div className="item" role="alert">
+          <div className="item-main">
+            <div className="notice notice-warn">
+              <strong>이 항목은 다른 곳에서 삭제되었어요.</strong> 입력한 내용은 그대로 두었어요. 필요하면 복사해 둔 뒤 ‘닫기’를 눌러 주세요.
+            </div>
+            <textarea
+              className="edit-area"
+              aria-label="삭제된 항목에 입력한 내용"
+              rows={2}
+              readOnly
+              value={[orphan.text, orphan.text2].filter(Boolean).join('\n')}
+            />
+            <div className="row">
+              <button type="button" className="btn btn-sm" onClick={p.onFormCancel}>
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {newForm && (
         <div className="item">
           <div className="item-main">

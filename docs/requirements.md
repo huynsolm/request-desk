@@ -10,7 +10,7 @@ Codex 등 독립 검수자가 "요구사항 → 구현 → 검증"을 따라갈 
 | R-INPUT-01 | "2"처럼 의미가 부족한 입력은 등록 거부(제목·고객명·원문) | `shared/validation.ts`, `server/service.ts#createRequest`, `0001_init.sql` CHECK | `rules.test.ts`, `db.test.ts`, E2E-01 |
 | R-INPUT-02 | 원문은 입력한 그대로 보존(CRLF→LF 통일만) | `createRequest`, `request_originals` | `rules.test.ts` [R-INPUT-02] |
 | R-INPUT-03 | 필수 입력값 검증(항목별 오류 문구) | `RequestPanel.tsx`, `createRequest` | `rules.test.ts`, E2E-01 |
-| R-INPUT-04 | 저장 실패 시 입력값 보존. "다시 저장"은 실패 당시 값이 아니라 **현재 입력**을 저장하고, 취소하면 대기가 사라지며, 재시도 성공 시 화면 상태·버전이 갱신됨 | `RequestPanel.tsx`, `RequestDetailPage.tsx#commitForm`, `TasksPage.tsx#TaskPanel`, `useSaver.ts` | E2E-02, E2E-08, **E2E-F1×2, E2E-F2×2, E2E-R1×4(여러 저장 동시 실패·반복 재시도·외부 수정 409), E2E-R2×3(충돌 뒤 건드리지 않은 필드 보호·고친 초안 보존·열어 둔 항목 입력창 보호), E2E-R3×3(저장 중 되돌리기·연속 수정), E2E-R4(인용문만 수정 시 본문 보호)** |
+| R-INPUT-04 | 저장 실패 시 입력값 보존. "다시 저장"은 실패 당시 값이 아니라 **현재 입력**을 저장하고, 취소하면 대기가 사라지며, 재시도 성공 시 화면 상태·버전이 갱신됨 | `RequestPanel.tsx`, `RequestDetailPage.tsx#commitForm`, `TasksPage.tsx#TaskPanel`, `useSaver.ts` | E2E-02, E2E-08, **E2E-F1×2, E2E-F2×2, E2E-R1×4(여러 저장 동시 실패·반복 재시도·외부 수정 409), E2E-R2×3(충돌 뒤 건드리지 않은 필드 보호·고친 초안 보존·열어 둔 항목 입력창 보호), E2E-R3×5(저장 중·재시도 중 되돌리기, 연속 수정), E2E-R4×2(인용문만 수정 시 본문 보호, 열어 둔 항목 삭제 시 입력 보존)** |
 | R-INPUT-05 | 잘못된 JSON 형태는 422(500 금지), 필드 길이 상한, 본문 1MB 상한(413) | `service.ts#str`, `shared/validation.ts#MAX`, `app.ts#bodyLimit` | `review-fixes.test.ts` |
 | R-LIST-01 | 목록: 제목·고객명 검색, 접수/검토 중/확정 필터, 첫 사용 vs 결과 없음 구분 | `listRequests`, `RequestsPage.tsx` | `rules.test.ts`, E2E-03 |
 | R-REVIEW-01 | 분석 항목을 수정하면 다시 검토 필요(서버·DB 이중) | `updateItem`, 트리거 `trg_items_edit_requires_review` | `rules.test.ts`, `db.test.ts`, E2E-04 |

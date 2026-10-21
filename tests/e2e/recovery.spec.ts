@@ -321,62 +321,104 @@ test('[E2E-R2] 항목 수정 창을 연 뒤 서버에서 그 항목이 바뀌어
   expect(after.content).toBe('외부에서 바꾼 요구사항 내용');
 });
 
-// ───── 4차 재검수(836b4ea) R3·R4 ─────
-async function slowPatch(page: Page, ms: number) {
+// ───── 4차·5차 재검수 R3·R4 ─────
+// 고정 지연(sleep) 대신, 저장 요청(PATCH)을 붙잡았다가 테스트가 직접 풀어 주는 방식으로 실행 순서를 보장한다.
+type GateMode = 'abort' | 'hold' | 'pass';
+async function gateTaskPatch(page: Page) {
+  const held: Array<() => void> = [];
+  const gate = {
+    mode: 'pass' as GateMode,
+    seen: 0, // 붙잡힌 PATCH 요청 수(누적)
+    releaseOne: () => held.shift()?.(),
+    releaseAll: () => {
+      gate.mode = 'pass';
+      while (held.length) held.shift()!();
+    },
+  };
   await page.route('**/api/tasks/*', async (route) => {
-    if (route.request().method() === 'PATCH') await new Promise((r) => setTimeout(r, ms));
+    if (route.request().method() !== 'PATCH' || gate.mode === 'pass') return route.continue();
+    if (gate.mode === 'abort') return route.abort('failed');
+    gate.seen += 1;
+    await new Promise<void>((res) => held.push(res));
     await route.continue();
   });
+  return gate;
+}
+
+/**
+ * 저장이 진행 중일 때 입력을 원래 값으로 되돌려도 마지막 입력(원래 값)이 저장되는지 확인한다.
+ * viaRetry=true 면 처음 저장은 실패시키고, "다시 저장"(재시도)이 진행 중일 때 되돌린다.
+ */
+async function revertWhileSaving(page: Page, request: APIRequestContext, opts: { label: string; field: 'title' | 'description'; viaRetry: boolean }) {
+  const { taskId } = await requestTaskWith(request, `R3 ${opts.field} ${opts.viaRetry ? '재시도' : '최초'}`, ['고객이 예약 가능한 날짜를 볼 수 있다']);
+  await page.goto(`/tasks/${taskId}`);
+  const panel = page.getByRole('complementary', { name: '작업 상세' });
+  const input = panel.getByLabel(opts.label, { exact: true });
+  await expect(input).not.toHaveValue('');
+  const original = await input.inputValue();
+  const temp = '임시로 바꾼 값';
+  const server = async () => (await (await request.get(`/api/tasks/${taskId}`)).json())[opts.field] as string;
+  const gate = await gateTaskPatch(page);
+
+  if (opts.viaRetry) {
+    gate.mode = 'abort';
+    await input.fill(temp);
+    await input.blur();
+    await expect(panel.getByText('저장하지 못했어요.')).toBeVisible(); // 처음 저장은 실패
+    gate.mode = 'hold';
+    await panel.getByRole('button', { name: '다시 저장' }).click(); // 재시도 진행 중(응답 대기)
+  } else {
+    gate.mode = 'hold';
+    await input.fill(temp);
+    await input.blur(); // 최초 저장 진행 중(응답 대기)
+  }
+  await expect.poll(() => gate.seen).toBe(1);
+
+  await input.fill(original); // 응답을 기다리는 동안 원래 값으로 되돌림
+  await input.blur();
+  gate.releaseOne(); // 진행 중이던 저장이 끝난다 → 서버는 잠시 임시 값
+  await expect.poll(server).toBe(temp);
+  // 마지막 입력(원래 값)을 저장하는 두 번째 요청이 나가야 한다. 누락되면 여기서 실패한다.
+  await expect.poll(() => gate.seen).toBe(2);
+  gate.releaseAll();
+  await expect.poll(server).toBe(original);
+  await expect(input).toHaveValue(original);
+  await expect(panel.getByText('저장하지 못했어요.')).toHaveCount(0);
 }
 
 test('[E2E-R3] 제목 저장이 진행 중일 때 원래 값으로 되돌리면 마지막 입력(원래 값)이 저장된다', async ({ page, request }) => {
-  const { taskId } = await requestTaskWith(request, 'R3 제목 되돌리기', ['고객이 예약 가능한 날짜를 볼 수 있다']);
-  await page.goto(`/tasks/${taskId}`);
-  const panel = page.getByRole('complementary', { name: '작업 상세' });
-  const original = await panel.getByLabel('작업 제목').inputValue();
-  await slowPatch(page, 1200);
-  const firstSaved = page.waitForResponse((r) => r.request().method() === 'PATCH' && r.url().includes('/api/tasks/'));
-  await panel.getByLabel('작업 제목').fill('임시로 바꾼 제목');
-  await panel.getByLabel('작업 제목').blur(); // 저장 요청이 진행 중
-  await panel.getByLabel('작업 제목').fill(original); // 진행 중에 원래 값으로 되돌림
-  await panel.getByLabel('작업 제목').blur();
-  await firstSaved; // 첫 저장(임시 제목)이 끝난 뒤의 서버 상태를 본다
-  expect((await (await request.get(`/api/tasks/${taskId}`)).json()).title).toBe('임시로 바꾼 제목');
-  // 그 뒤 마지막 입력(원래 값)이 저장되어야 한다. 저장이 누락되면 서버는 임시 제목에 머문다.
-  await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).title, { timeout: 15000 }).toBe(original);
-  await expect(panel.getByLabel('작업 제목')).toHaveValue(original);
-  await expect(panel.getByText('저장하지 못했어요.')).toHaveCount(0);
+  await revertWhileSaving(page, request, { label: '작업 제목', field: 'title', viaRetry: false });
 });
 
 test('[E2E-R3] 설명 저장이 진행 중일 때 원래 값으로 되돌려도 마지막 입력이 저장된다', async ({ page, request }) => {
-  const { taskId } = await requestTaskWith(request, 'R3 설명 되돌리기', ['고객이 예약 가능한 날짜를 볼 수 있다']);
-  await page.goto(`/tasks/${taskId}`);
-  const panel = page.getByRole('complementary', { name: '작업 상세' });
-  await expect(panel.getByLabel('설명')).not.toHaveValue('');
-  const original = await panel.getByLabel('설명').inputValue();
-  await slowPatch(page, 1200);
-  const firstSaved = page.waitForResponse((r) => r.request().method() === 'PATCH' && r.url().includes('/api/tasks/'));
-  await panel.getByLabel('설명').fill('임시로 바꾼 설명');
-  await panel.getByLabel('설명').blur();
-  await panel.getByLabel('설명').fill(original);
-  await panel.getByLabel('설명').blur();
-  await firstSaved;
-  expect((await (await request.get(`/api/tasks/${taskId}`)).json()).description).toBe('임시로 바꾼 설명');
-  await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).description, { timeout: 15000 }).toBe(original);
-  await expect(panel.getByLabel('설명')).toHaveValue(original);
+  await revertWhileSaving(page, request, { label: '설명', field: 'description', viaRetry: false });
+});
+
+test('[E2E-R3] "다시 저장"(재시도)이 진행 중일 때 제목을 원래 값으로 되돌려도 마지막 입력이 저장된다', async ({ page, request }) => {
+  await revertWhileSaving(page, request, { label: '작업 제목', field: 'title', viaRetry: true });
+});
+
+test('[E2E-R3] "다시 저장"(재시도)이 진행 중일 때 설명을 원래 값으로 되돌려도 마지막 입력이 저장된다', async ({ page, request }) => {
+  await revertWhileSaving(page, request, { label: '설명', field: 'description', viaRetry: true });
 });
 
 test('[E2E-R3] 저장 중에 다른 값으로 계속 고쳐도 마지막 입력이 저장되고 사라지지 않는다', async ({ page, request }) => {
   const { taskId } = await requestTaskWith(request, 'R3 연속 수정', ['고객이 예약 가능한 날짜를 볼 수 있다']);
   await page.goto(`/tasks/${taskId}`);
   const panel = page.getByRole('complementary', { name: '작업 상세' });
-  await slowPatch(page, 1000);
-  for (const v of ['첫 번째 제목', '두 번째 제목', '세 번째 최종 제목']) {
-    await panel.getByLabel('작업 제목').fill(v);
-    await panel.getByLabel('작업 제목').blur();
+  const input = panel.getByLabel('작업 제목', { exact: true });
+  const gate = await gateTaskPatch(page);
+  gate.mode = 'hold';
+  await input.fill('첫 번째 제목');
+  await input.blur();
+  await expect.poll(() => gate.seen).toBe(1);
+  for (const v of ['두 번째 제목', '세 번째 최종 제목']) {
+    await input.fill(v);
+    await input.blur();
   }
-  await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).title, { timeout: 20000 }).toBe('세 번째 최종 제목');
-  await expect(panel.getByLabel('작업 제목')).toHaveValue('세 번째 최종 제목');
+  gate.releaseAll(); // 이후 요청은 붙잡지 않고 통과
+  await expect.poll(async () => (await (await request.get(`/api/tasks/${taskId}`)).json()).title).toBe('세 번째 최종 제목');
+  await expect(input).toHaveValue('세 번째 최종 제목');
 });
 
 test('[E2E-R4] 수정 창에서 인용문만 고쳐도, 그 사이 서버에서 바뀐 본문은 덮어쓰지 않는다(충돌 안내 후 바꾼 부분만 저장)', async ({ page, request }) => {
@@ -403,4 +445,25 @@ test('[E2E-R4] 수정 창에서 인용문만 고쳐도, 그 사이 서버에서 
   await expect.poll(async () => (await (await request.get(`/api/requests/${rid}`)).json()).items.find((i: any) => i.id === itemId).quote).toBe('예약이 들어오면 제가 확인할 수 있으면 좋겠어요');
   item = (await (await request.get(`/api/requests/${rid}`)).json()).items.find((i: any) => i.id === itemId);
   expect(item.content).toBe('외부에서 바꾼 요구사항 본문');
+});
+
+test('[E2E-R4] 수정 창을 열어 둔 항목이 다른 곳에서 삭제되면 조용히 닫지 않고 안내하며 입력은 그대로 남긴다', async ({ page, request }) => {
+  const { rid, itemId } = await newRequestWithItem(request, 'R4 삭제된 항목');
+  await post(request, `/api/requests/${rid}/items`, { kind: 'requirement', content: '다른 요구사항 항목' });
+  await post(request, `/api/requests/${rid}/items`, { kind: 'requirement', content: '끝까지 남는 요구사항 항목' }); // 목록이 비면 분석 화면이 처음 상태로 돌아가므로 하나는 남긴다
+  await page.goto(`/requests/${rid}`);
+  await page.getByRole('button', { name: '수정: 예약 가능한 날짜 조회' }).click();
+  await page.getByRole('textbox', { name: '내용을 입력해 주세요' }).fill('열어 둔 사이 삭제될 항목의 새 내용');
+  // 다른 곳에서 이 항목을 삭제한다.
+  const cur = (await (await request.get(`/api/requests/${rid}`)).json()).items.find((i: any) => i.id === itemId);
+  const del = await request.delete(`/api/items/${itemId}`, { data: { version: cur.version } });
+  expect(del.ok()).toBeTruthy();
+  // 화면을 새로 불러오게 한다(다른 항목 삭제).
+  await page.getByRole('button', { name: '삭제: 다른 요구사항 항목' }).click();
+  await expect(page.getByText('항목을 삭제했어요.')).toBeVisible();
+  // 입력창이 조용히 사라지지 않고, 삭제 안내와 함께 입력한 내용이 그대로 보인다.
+  await expect(page.getByText('이 항목은 다른 곳에서 삭제되었어요.')).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '삭제된 항목에 입력한 내용' })).toHaveValue('열어 둔 사이 삭제될 항목의 새 내용');
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: '삭제된 항목에 입력한 내용' })).toHaveCount(0);
 });

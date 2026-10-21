@@ -258,6 +258,10 @@ function TaskPanel({ taskId, onClose, onChanged }: { taskId: string; onClose: ()
             settleDirty();
             return null;
           }
+          // 실제로 보내는 값을 "저장 중인 값"으로 기록한다. 처음 저장이든 다시 저장(재시도)이든 같은 경로이므로,
+          // 어느 쪽이든 응답을 기다리는 동안 입력을 되돌리면 그 입력이 마지막 값으로 저장 대기에 들어간다.
+          if (patch.title !== undefined) sentRef.current.title = patch.title;
+          if (patch.description !== undefined) sentRef.current.desc = patch.description;
           try {
             const d = await api.updateTask(cur.id, { version: cur.version, ...patch });
             tRef.current = d; // 다음 저장이 렌더를 기다리지 않고 최신 version 을 쓰도록

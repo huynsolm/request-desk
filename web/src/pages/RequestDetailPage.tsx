@@ -201,6 +201,7 @@ export function RequestDetailPage() {
     const failMsg = (e: ApiError) =>
       e.retryable ? '저장하지 못했어요. 입력한 내용은 그대로 남아 있어요.' : (e.fieldErrors?.quote ?? e.fieldErrors?.content ?? e.message);
     /** 실패 처리. 그 사이 항목이 바뀌어 충돌(409)이면 입력은 그대로 두고, 최신 version 으로 다시 적용할 수 있게 한다. */
+    const goneMsg = '이 항목은 다른 곳에서 삭제되었어요. 입력한 내용은 그대로 두었어요. 필요하면 복사해 둔 뒤 ‘취소’를 눌러 주세요.';
     const onFail = (e: ApiError, itemId?: string) => {
       if (e.code === 'version_conflict') {
         const fresh = itemId ? dRef.current?.items.find((i) => i.id === itemId) : undefined;
@@ -214,7 +215,7 @@ export function RequestDetailPage() {
 
     if (f.mode === 'edit') {
       const item = items.find((i) => i.id === f.itemId);
-      if (!item) return cancelForm();
+      if (!item) return patchForm({ busy: false, error: goneMsg });
       // 창을 열었을 때의 값(base)과 비교해 사용자가 실제로 고친 필드만 저장한다. 고치지 않은 필드는 보내지 않으므로
       // 그 사이 서버에서 바뀐 최신 내용을 열 때의 오래된 값으로 덮어쓰지 않는다.
       const quoteVal = f.text2.trim() || null;
@@ -240,7 +241,7 @@ export function RequestDetailPage() {
       if (!r.ok) onFail(r.error);
     } else if (f.mode === 'resolve') {
       const item = items.find((i) => i.id === f.itemId);
-      if (!item) return cancelForm();
+      if (!item) return patchForm({ busy: false, error: goneMsg });
       const label = item.kind === 'question' ? '고객 답변' : '결정 내용';
       const err = checkNote(text, label);
       if (err) return patchForm({ error: err });
@@ -259,7 +260,7 @@ export function RequestDetailPage() {
       if (!r.ok) onFail(r.error, item.id);
     } else if (f.mode === 'convert') {
       const item = items.find((i) => i.id === f.itemId);
-      if (!item) return cancelForm();
+      if (!item) return patchForm({ busy: false, error: goneMsg });
       const e1 = checkItemContent(text);
       const e2 = checkNote(f.text2, '전환 근거');
       if (e1 || e2) return patchForm({ error: e1 ?? e2 ?? undefined });

@@ -7,12 +7,12 @@
 | 항목 | 상태 |
 |---|---|
 | 1단계(AI 없는 핵심 기능) | **구현 완료**, 독립 검수 3차까지 반영 |
-| 4차 재검수 | 완료 — R3·R4 발견, 수정함. **5차 재검수 대기 중** — 요청 프롬프트는 [codex-rereview-5-lite-prompt.md](codex-rereview-5-lite-prompt.md) |
+| 4차 재검수 | 완료 — R3·R4 발견, 수정함. 5차 재검수(P1·P2)도 반영함. **6차 재검수 대기 중** — 요청 프롬프트는 [codex-rereview-6-lite-prompt.md](codex-rereview-6-lite-prompt.md) |
 | `main` 병합 | **보류** — 원격 `main` 은 비어 있음. 검수 통과 후 사용자가 승인하면 병합 |
 | 2단계(모의 분석 제공자) | **보류** — 검수 통과 후 시작 |
 | 3단계(실제 AI) | 미착수 — 제공자·인증·비용을 사용자와 확인한 뒤 별도 진행 |
 
-검증 상태(R3·R4 수정 후): 타입 검사 통과, 서버·DB 테스트 58개, 브라우저 E2E 28개(연속 2회), 빌드 성공.
+검증 상태(R3·R4 수정 후): 타입 검사 통과, 서버·DB 테스트 58개, 브라우저 E2E 31개(연속 2회), 빌드 성공.
 미검증: 기준 디자인과의 픽셀 단위 일치, 스크린 리더, Chrome 외 브라우저, 한글 IME 실입력. 자세한 내용은 [reports/stage-1.md](reports/stage-1.md).
 
 ## 2. 다른 PC에서 시작하기
@@ -33,7 +33,7 @@ npm run dev                               # http://localhost:5173  (API 는 127.
 ```bash
 npm run typecheck
 npm test            # 기대: 58개 통과
-npm run test:e2e    # 기대: 28개 통과 (약 2.5분, 포트 3199/5199, data/e2e.db 사용)
+npm run test:e2e    # 기대: 31개 통과 (약 3분, 포트 3199/5199, data/e2e.db 사용)
 npm run build
 ```
 
@@ -49,7 +49,7 @@ npm run build
 
 ## 3. 이어서 할 일 (순서)
 
-1. **5차 재검수 결과 받기** — [codex-rereview-5-lite-prompt.md](codex-rereview-5-lite-prompt.md) 를 Codex 에 붙여 넣어 요청(범위를 변경분으로 좁힌 경량 프롬프트). 토큰을 아끼려면 범위를 이번 변경분으로 좁힌 [codex-rereview-4-lite-prompt.md](codex-rereview-4-lite-prompt.md) 를 쓴다. 결과의 지적 사항은 코드·실행으로 재현해 확인한 뒤 수정하고, 수정 전 코드에서 회귀 테스트가 실패하는지도 확인한다(지금까지의 방식, [reviews/](reviews/README.md) 참조).
+1. **6차 재검수 결과 받기** — [codex-rereview-6-lite-prompt.md](codex-rereview-6-lite-prompt.md) 를 Codex 에 붙여 넣어 요청(범위를 변경분으로 좁힌 경량 프롬프트). 토큰을 아끼려면 범위를 이번 변경분으로 좁힌 [codex-rereview-4-lite-prompt.md](codex-rereview-4-lite-prompt.md) 를 쓴다. 결과의 지적 사항은 코드·실행으로 재현해 확인한 뒤 수정하고, 수정 전 코드에서 회귀 테스트가 실패하는지도 확인한다(지금까지의 방식, [reviews/](reviews/README.md) 참조).
 2. **검수 통과 후, 사용자 승인을 받아** `stage-1-review` 를 `main` 에 병합.
 3. **2단계: 모의 분석 제공자** (사용자 지시 §7)
    - 분석 호출을 별도 인터페이스(`AnalysisProvider`)로 분리, 실제 AI 와 모의 분석을 교체 가능하게
@@ -97,4 +97,5 @@ tests/e2e/                 flow.spec.ts(주요 흐름) · recovery.spec.ts(저�
 | 2차 | b371952 | R1(여러 저장 동시 실패 후 재시도) | be7e60d |
 | 3차 | be7e60d | R2(건드리지 않은 필드 덮어쓰기), T1(테스트 타이밍) | e0dea65 |
 | 4차 | 836b4ea | R3(저장 중 되돌리기 유실), R4(인용문만 수정 시 본문 덮어쓰기) | (이 커밋) |
-| 5차 | — | **대기 중** | — |
+| 5차 | 39006ad | P1(재시도 중 되돌리기 유실), P2(테스트 고정 지연), 완료 조건 동시 편집(조건부 수용) | (이 커밋) |
+| 6차 | — | **대기 중** | — |
