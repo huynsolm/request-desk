@@ -248,7 +248,8 @@ describe('검수 반영', () => {
     const d = await detail(env, rid);
     const r = d.items.find((i: any) => i.content === '결제 기능');
     expect(r.reviewState).toBe('unreviewed'); // 검토 전이라 확정되지 않는다
-    expect((await env.api('GET', `/api/requests/${rid}/confirm-preview`)).json.blockers ?? []).toBeDefined();
+    const blockers = (await env.api('GET', `/api/requests/${rid}/confirm-preview`)).json.blockers as { code: string }[];
+    expect(blockers.map((b) => b.code)).toContain('unreviewed_items');
   });
 });
 
