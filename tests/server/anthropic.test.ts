@@ -228,6 +228,30 @@ describe('AI 호출 실패 처리', () => {
   });
 });
 
+describe('검수 반영', () => {
+  it('[R-AI-16] 결과 저장 단계에서 내부 오류가 나도 이미 쓴 모델·토큰은 기록된다', async () => {
+    respond = (_q, res) => sendJson(res, 200, messageJson(GOOD));
+    const env = aiEnv();
+    env.db.exec("CREATE TRIGGER t_fail BEFORE INSERT ON analysis_items BEGIN SELECT RAISE(ABORT, 'boom'); END");
+    const { run } = await runOnce(env);
+    expect(run!.status).toBe('failed');
+    expect(run!.errorCode).toBe('internal');
+    expect([run!.model, run!.inputTokens, run!.outputTokens]).toEqual(['claude-opus-5-5', 321, 45]);
+  });
+
+  it('[R-AI-03b] 한계: 인용문이 원문에 "존재"하는지만 검증한다 — 내용과 무관한 실제 인용은 통과하므로 사람이 검토해야 한다', async () => {
+    respond = (_q, res) =>
+      sendJson(res, 200, messageJson({ ...GOOD, requirements: [{ content: '결제 기능', quote: Q1 }] }));
+    const env = aiEnv();
+    const { rid, run } = await runOnce(env);
+    expect(run!.status).toBe('succeeded');
+    const d = await detail(env, rid);
+    const r = d.items.find((i: any) => i.content === '결제 기능');
+    expect(r.reviewState).toBe('unreviewed'); // 검토 전이라 확정되지 않는다
+    expect((await env.api('GET', `/api/requests/${rid}/confirm-preview`)).json.blockers ?? []).toBeDefined();
+  });
+});
+
 describe('사용량 상한', () => {
   const day = (d: number, h = 12) => () => new Date(2026, 9, d, h, 0, 0);
 

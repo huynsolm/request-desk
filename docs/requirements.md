@@ -66,7 +66,7 @@ Codex 등 독립 검수자가 "요구사항 → 구현 → 검증"을 따라갈 
 | R-ANALYZE-16 | 좁은 화면(375px)에서 분석 전·중·후 화면이 잘리지 않는다 | `styles.css` | E2E-A7 |
 | R-AI-01 | AI 분석 결과는 항상 `AI 제안 · 검토 전`(origin=ai)으로 저장되고, 실행 기록에 모델·입출력 토큰이 남는다. AI 결과만으로 확정되지 않는다 | `AnthropicAnalysisProvider`, `applyResult`, 0004 | `anthropic.test.ts` [R-AI-01], E2E-AI1 |
 | R-AI-02 | 외부로는 요청 원문만 보낸다(제목·고객명 제외). API 키는 서버에서 헤더로만 사용된다 | `anthropic.ts` | [R-AI-02], E2E-AI1 |
-| R-AI-03 | 원문 속 지시문은 데이터로만 전달(경계 문자열)되고, 그 때문에 AI 가 만든 원문에 없는 요구사항은 근거 검증에서 제외된다 | 프롬프트, `applyResult` | [R-AI-03] |
+| R-AI-03 | 원문 속 지시문은 데이터로만 전달(경계 문자열)되고, AI 가 원문에 없는 근거 구절을 만들면 제외된다(**인용문의 존재만 검증하며 요구사항과의 의미 일치는 보장하지 않는다 — 사람이 검토**) | 프롬프트, `applyResult` | [R-AI-03] |
 | R-AI-04 | 키 오류 시 "API 키 확인" 안내만 보이고, 키·제공자 원문 오류 메시지는 응답·로그 어디에도 없다 | `toProviderError` | [R-AI-04], E2E-AI2 |
 | R-AI-05 | 429·5xx·네트워크 오류는 구분된 안전한 문구로 실패하고 항목이 생기지 않는다. 자동 재시도는 1회뿐 | `maxRetries: 1` | [R-AI-05] |
 | R-AI-06 | 형식이 틀린 응답(JSON 아님·필드 누락)은 `invalid_response`, 잘림은 `truncated` 로 실패하며 항목을 만들지 않는다. 쓴 토큰은 기록 | `analyze`, `AnalysisResultSchema` | [R-AI-06] |
@@ -78,6 +78,7 @@ Codex 등 독립 검수자가 "요구사항 → 구현 → 검증"을 따라갈 
 | R-AI-12 | `ai` 제공자는 키가 없으면 시작하지 않는다(안내에 키 값 없음) | `registry.ts` | [R-AI-12] |
 | R-AI-13 | 테스트용 BASE URL 은 localhost 만 허용(키가 다른 곳으로 가지 않게) | `assertSafeBaseUrl` | [R-AI-13] |
 | R-AI-14 | 사용량 상한 환경 변수가 잘못되면 시작하지 않는다 | `positiveInt` | [R-AI-14] |
+| R-AI-16 | 결과 저장 중 내부 오류로 실패해도 제공자가 알려 준 모델·토큰은 기록한다 | `execute` catch | [R-AI-16] |
 | R-AI-15 | AI 제공자일 때 화면에 원문 전송 안내와 사용량을 표시하고, 한도에 닿으면 버튼을 막는다(서버도 막음) | `RequestDetailPage` | E2E-AI1, E2E-AI3 |
 
 ## 범위 밖(다음 단계)

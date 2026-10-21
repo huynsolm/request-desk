@@ -324,13 +324,27 @@ export function RequestDetailPage() {
       } else {
         setReanalyzeOpen(false);
         toast(err.retryable ? '분석을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.' : err.message);
-        if (err.code === 'analysis_running' || err.code === 'locked_confirmed') await reload();
+        if (err.code === 'analysis_running' || err.code === 'locked_confirmed' || err.code === 'usage_limit') await reload();
       }
     } finally {
       startingRef.current = false;
       setStarting(false);
     }
   }
+
+  // 다른 탭에서 한도를 쓰거나 날짜·달이 바뀌었을 수 있으니, 화면으로 돌아올 때 사용량을 다시 불러온다.
+  useEffect(() => {
+    if (!provider?.sendsDataTo) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void reload();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [provider?.sendsDataTo, reload]);
 
   // 분석이 진행 중이면 결과를 주기적으로 확인한다.
   useEffect(() => {

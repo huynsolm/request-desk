@@ -175,7 +175,7 @@ async function execute(
     applyResult(db, provider, runId, parsed.data, usage);
   } catch {
     try {
-      markFailed(db, runId, 'internal', '분석 결과를 저장하지 못했어요. 다시 시도해 주세요.');
+      markFailed(db, runId, 'internal', '분석 결과를 저장하지 못했어요. 다시 시도해 주세요.', usage);
     } catch {
       /* 이미 끝난 실행 */
     }
