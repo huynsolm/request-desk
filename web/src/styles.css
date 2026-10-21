@@ -353,3 +353,6 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
   .tasks-list .thead { display: none; }
   .tasks-list { padding: 24px 20px 40px; }
 }
+
+/* 분석 중 스켈레톤 */
+.skel { height: 14px; border-radius: 4px; background: #eeeff2; margin-top: 8px; }

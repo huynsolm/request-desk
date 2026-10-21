@@ -86,8 +86,27 @@ export interface RequestDetail {
     updatedAt: string;
   };
   items: AnalysisItem[];
+  analysis: { provider: ProviderInfo | null; latestRun: AnalysisRunSummary | null };
   confirmations: Confirmation[]; // 최신순
   tasks: { id: string; title: string; status: TaskStatus; sourceChanged: boolean }[];
+}
+
+export interface ProviderInfo {
+  id: 'mock' | 'ai';
+  label: string;
+  isMock: boolean;
+}
+export interface AnalysisRunSummary {
+  id: string;
+  status: 'running' | 'succeeded' | 'failed';
+  provider: 'mock' | 'ai';
+  reanalysis: boolean; // 시작할 때 이미 분석 항목이 있었는가
+  startedAt: string;
+  finishedAt: string | null;
+  itemCount: number | null; // 새로 추가한 제안 수
+  skippedCount: number | null; // 검증을 통과하지 못해 제외한 제안 수
+  errorCode: string | null;
+  errorMessage: string | null;
 }
 
 export interface ConfirmPreview {

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Db } from './db/open.ts';
 import { tx } from './db/open.ts';
 import { AppError, translateDbError } from './errors.ts';
+import { runFromRow } from './analysis/summary.ts';
 import {
   MAX,
   tooLong,
@@ -239,7 +240,11 @@ export function getRequestDetail(db: Db, requestId: string): RequestDetail {
       resolutionText: ci.resolution_text,
     })),
   }));
+  const lastRun = db
+    .prepare('SELECT * FROM analysis_runs WHERE request_id = ? ORDER BY started_at DESC, rowid DESC LIMIT 1')
+    .get(requestId) as Row | undefined;
   return {
+    analysis: { provider: null, latestRun: lastRun ? runFromRow(lastRun) : null }, // provider 는 app 이 채운다
     request: {
       id: req.id,
       title: req.title,
@@ -613,6 +618,10 @@ export function confirmPreview(db: Db, requestId: string): ConfirmPreview {
   const blockers: ConfirmPreview['blockers'] = [];
   if (req.phase === 'confirmed') {
     blockers.push({ code: 'already_confirmed', message: '이미 확정된 요청이에요.' });
+  }
+  const running = db.prepare(`SELECT 1 FROM analysis_runs WHERE request_id = ? AND status = 'running'`).get(requestId);
+  if (running) {
+    blockers.push({ code: 'analysis_running', message: '분석이 진행 중이에요. 끝난 뒤에 확정할 수 있어요.' });
   }
   const unreviewed = items.filter((i) => i.review_state === 'unreviewed');
   if (unreviewed.length) {

@@ -1,5 +1,6 @@
 import type {
   AnalysisItem,
+  AnalysisRunSummary,
   ApiErrorBody,
   ConfirmPreview,
   CreateTasksInput,
@@ -66,6 +67,8 @@ export const api = {
   getRequest: (id: string) => call<RequestDetail>('GET', `/api/requests/${id}`),
   updateRequest: (id: string, b: { version: number; title?: string; customerName?: string; originalText?: string }) =>
     call<RequestDetail>('PATCH', `/api/requests/${id}`, b),
+  analyze: (id: string, confirmReanalysis: boolean) =>
+    call<{ run: AnalysisRunSummary }>('POST', `/api/requests/${id}/analyze`, { confirmReanalysis }),
   reopen: (id: string) => call<RequestDetail>('POST', `/api/requests/${id}/reopen`),
   addItem: (rid: string, b: { kind: ItemKind; content: string; quote?: string | null }) =>
     call<AnalysisItem>('POST', `/api/requests/${rid}/items`, b),

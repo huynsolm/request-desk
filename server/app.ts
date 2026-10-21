@@ -3,6 +3,18 @@ import { bodyLimit } from 'hono/body-limit';
 import type { Db } from './db/open.ts';
 import { AppError, translateDbError } from './errors.ts';
 import * as svc from './service.ts';
+import { startAnalysis } from './analysis/run.ts';
+import { MockAnalysisProvider } from './analysis/mock.ts';
+import type { AnalysisProvider } from './analysis/types.ts';
+import type { RequestDetail } from '../shared/types.ts';
+
+export interface AppOptions {
+  /** 분석 제공자. 없으면 모의 분석을 쓴다. */
+  provider?: AnalysisProvider;
+  analysisTimeoutMs?: number;
+  /** 개발용 조절 엔드포인트(모의 분석의 지연·실패)를 켠다. 기본 꺼짐. */
+  devControls?: boolean;
+}
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 // 개발 웹(Vite) 출처. 다른 포트를 쓰면 ALLOWED_ORIGINS(쉼표로 구분)로 지정한다.
@@ -26,8 +38,13 @@ function requireVersion(b: Record<string, any>): number {
   return b.version;
 }
 
-export function createApp(db: Db): Hono {
+export function createApp(db: Db, options: AppOptions = {}): Hono {
   const app = new Hono();
+  const provider = options.provider ?? new MockAnalysisProvider();
+  const timeoutMs = options.analysisTimeoutMs ?? 30000;
+  const providerInfo = { id: provider.id, label: provider.label, isMock: provider.isMock };
+  /** 요청 상세 응답에 분석 제공자 정보를 붙인다(화면이 "모의 분석 · 개발용"을 표시하는 데 쓴다). */
+  const withProvider = (d: RequestDetail): RequestDetail => ({ ...d, analysis: { ...d.analysis, provider: providerInfo } });
 
   // 비정상적으로 큰 본문은 읽기 전에 거부한다(필드별 길이 상한은 service 에서 별도로 검사).
   app.use(
@@ -82,14 +99,36 @@ export function createApp(db: Db): Hono {
   app.get('/api/requests', (c) => c.json(svc.listRequests(db, (c.req.query('q') ?? '').trim(), c.req.query('status') ?? 'all')));
   app.post('/api/requests', async (c) => {
     const b = await body(c);
-    return c.json(svc.createRequest(db, b as any), 201);
+    return c.json(withProvider(svc.createRequest(db, b as any)), 201);
   });
-  app.get('/api/requests/:id', (c) => c.json(svc.getRequestDetail(db, c.req.param('id'))));
+  app.get('/api/requests/:id', (c) => c.json(withProvider(svc.getRequestDetail(db, c.req.param('id')))));
   app.patch('/api/requests/:id', async (c) => {
     const b = await body(c);
-    return c.json(svc.updateRequest(db, c.req.param('id'), { ...b, version: requireVersion(b) }));
+    return c.json(withProvider(svc.updateRequest(db, c.req.param('id'), { ...b, version: requireVersion(b) })));
   });
-  app.post('/api/requests/:id/reopen', (c) => c.json(svc.reopenRequest(db, c.req.param('id'))));
+  app.post('/api/requests/:id/reopen', (c) => c.json(withProvider(svc.reopenRequest(db, c.req.param('id')))));
+
+  // 분석 실행(2단계): 실행 기록을 만들고 곧바로 202 로 돌려준다. 결과는 요청 상세(analysis.latestRun)로 확인한다.
+  app.post('/api/requests/:id/analyze', async (c) => {
+    const b = await body(c);
+    const { run, done } = startAnalysis(db, provider, c.req.param('id'), {
+      confirmReanalysis: b.confirmReanalysis === true,
+      timeoutMs,
+    });
+    void done.catch(() => {});
+    return c.json({ run }, 202);
+  });
+
+  // 개발용: 모의 분석의 지연·실패 조절(ENABLE_DEV_CONTROLS=1 일 때만, 모의 제공자에서만)
+  if (options.devControls && provider instanceof MockAnalysisProvider) {
+    app.get('/api/dev/mock-analysis', (c) => c.json(provider.controls));
+    app.post('/api/dev/mock-analysis', async (c) => {
+      const b = await body(c);
+      if (typeof b.delayMs === 'number') provider.controls.delayMs = Math.max(0, b.delayMs);
+      if (typeof b.failNext === 'number') provider.controls.failNext = Math.max(0, b.failNext);
+      return c.json(provider.controls);
+    });
+  }
 
   // 분석 항목
   app.post('/api/requests/:id/items', async (c) => {
@@ -124,7 +163,7 @@ export function createApp(db: Db): Hono {
   app.post('/api/requests/:id/confirm', async (c) => {
     const b = await body(c);
     if (typeof b.contentSeq !== 'number') throw new AppError(422, 'validation', '확정 승인 정보(contentSeq)가 필요해요.');
-    return c.json(svc.confirmRequest(db, c.req.param('id'), b.contentSeq));
+    return c.json(withProvider(svc.confirmRequest(db, c.req.param('id'), b.contentSeq)));
   });
 
   // 작업

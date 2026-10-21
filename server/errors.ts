@@ -20,6 +20,7 @@ const DB_MESSAGES: Record<string, [number, string]> = {
   resolution_required: [422, '질문과 미확정 사항에는 해결 상태가 있어야 해요.'],
   task_link_immutable: [409, '작업과 요구사항의 연결은 바꿀 수 없어요.'],
   immutable_original: [409, '원문 개정판은 바꿀 수 없어요.'],
+  immutable_analysis_run: [409, '끝난 분석 기록은 바꿀 수 없어요.'],
   last_criterion: [422, '작업에는 완료 조건이 하나 이상 있어야 해요.'],
 };
 

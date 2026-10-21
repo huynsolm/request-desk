@@ -1,6 +1,7 @@
 import { openDb, type Db } from '../../server/db/open.ts';
 import { migrate } from '../../server/db/migrate.ts';
-import { createApp } from '../../server/app.ts';
+import { createApp, type AppOptions } from '../../server/app.ts';
+import { MockAnalysisProvider } from '../../server/analysis/mock.ts';
 import * as svc from '../../server/service.ts';
 
 export const ORIGINAL =
@@ -14,10 +15,11 @@ export interface Env {
   api: (method: string, path: string, body?: unknown) => Promise<{ status: number; json: any }>;
 }
 
-export function makeEnv(db?: Db): Env {
+export function makeEnv(db?: Db, options: AppOptions = {}): Env {
   const database = db ?? openDb(':memory:');
   migrate(database);
-  const app = createApp(database);
+  // 테스트의 모의 분석은 기다리지 않는다(지연 0).
+  const app = createApp(database, { provider: new MockAnalysisProvider({ delayMs: 0 }), ...options });
   const api = async (method: string, path: string, body?: unknown) => {
     const res = await app.request(path, {
       method,

@@ -304,3 +304,50 @@ export function TaskModal({
     </Overlay>
   );
 }
+
+/** 다시 분석 확인창 — 기존 항목(사람이 고치거나 지운 것 포함)은 그대로 두고 새 제안만 추가한다는 사실을 알리고 확인받는다. */
+export function ReanalyzeDialog({
+  itemCount,
+  isMock,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  itemCount: number;
+  isMock: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Overlay variant="center" label="다시 분석하기" onClose={onClose} closeOnBackdrop={!busy}>
+      <div className="modal-head">
+        <h2>다시 분석할까요?</h2>
+        <p>이미 분석 항목이 {itemCount}개 있어요.</p>
+      </div>
+      <div className="modal-body">
+        <div className="dashed-note">
+          <strong>기존 항목은 그대로 두고</strong>, 새 제안만 ‘검토 전’으로 추가해요. 직접 고치거나 검토한 항목, 답변·결정을 기록한 항목, 삭제한 항목은 건드리지 않고, 이미 있는 제안과 같은 것은 다시 만들지 않아요.
+        </div>
+        {isMock && (
+          <div className="hint">모의 분석은 같은 샘플 결과를 돌려주므로 새로 추가되는 제안이 없을 수도 있어요.</div>
+        )}
+      </div>
+      <div className="modal-foot">
+        <button type="button" className="btn" onClick={onClose}>
+          취소
+        </button>
+        <button type="button" className="btn btn-primary btn-lg" disabled={busy} onClick={onConfirm}>
+          {busy ? (
+            <>
+              <Spinner />
+              시작하는 중…
+            </>
+          ) : (
+            '다시 분석하기'
+          )}
+        </button>
+      </div>
+    </Overlay>
+  );
+}

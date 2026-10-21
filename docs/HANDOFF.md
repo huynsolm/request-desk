@@ -1,6 +1,6 @@
 # 인수인계 — 다른 PC에서 이어서 작업하기
 
-마지막 갱신: 2026-10-21 · 검수 통과 커밋 `a213429` · 브랜치 `main`
+마지막 갱신: 2026-10-21 · `main` = 1단계(검수 통과 `a213429` + 문서) · 작업 브랜치 `stage-2-mock-analysis`(2단계, 검수 대기)
 
 ## 1. 지금 어디까지 왔나
 
@@ -8,10 +8,10 @@
 |---|---|
 | 1단계(AI 없는 핵심 기능) | **구현 완료, 독립 검수 6차까지 통과** (병합 차단 문제 없음) |
 | `main` 병합 | **완료** — 2026-10-21, 검수받은 커밋 `a213429` 를 fast-forward 로 병합·push. 원격 `stage-1-review` 브랜치는 같은 커밋으로 남아 있음 |
-| 2단계(모의 분석 제공자) | **아직 시작하지 않음** — 사용자가 시작을 지시하면 진행 |
+| 2단계(모의 분석 제공자) | **구현 완료, 독립 검수 대기** — 브랜치 `stage-2-mock-analysis`(아직 `main` 에 병합 안 함). 보고서 [reports/stage-2.md](reports/stage-2.md), 검수 요청 프롬프트 [codex-review-stage2-lite-prompt.md](codex-review-stage2-lite-prompt.md) |
 | 3단계(실제 AI) | 미착수 — 제공자·인증·비용을 사용자와 확인한 뒤 별도 진행 |
 
-검증 상태(`a213429`): 타입 검사 통과, 서버·DB 테스트 58개, 브라우저 E2E 31개(연속 2회), 빌드 성공.
+검증 상태: `main`(1단계) 서버·DB 58개, E2E 31개. `stage-2-mock-analysis` 는 서버·DB **83개**, E2E **38개**(연속 2회), 타입 검사·빌드 통과.
 미검증: 기준 디자인과의 픽셀 단위 일치, 스크린 리더, Chrome 외 브라우저, 한글 IME 실입력. 자세한 내용은 [reports/stage-1.md](reports/stage-1.md).
 
 ## 2. 다른 PC에서 시작하기
@@ -20,6 +20,7 @@
 
 ```bash
 git clone -b main https://github.com/huynsolm/request-desk.git
+# 2단계 작업을 이어서 하려면: git switch stage-2-mock-analysis
 cd request-desk
 npm ci
 npm run db:reset                          # DB 만들기 + 샘플 3건
@@ -31,8 +32,8 @@ npm run dev                               # http://localhost:5173  (API 는 127.
 확인용 명령:
 ```bash
 npm run typecheck
-npm test            # 기대: 58개 통과
-npm run test:e2e    # 기대: 31개 통과 (약 3분, 포트 3199/5199, data/e2e.db 사용)
+npm test            # 기대: main 58개 / stage-2-mock-analysis 83개
+npm run test:e2e    # 기대: main 31개 / stage-2-mock-analysis 38개 (약 3분, 포트 3199/5199, data/e2e.db 사용)
 npm run build
 ```
 
@@ -48,13 +49,9 @@ npm run build
 
 ## 3. 이어서 할 일 (순서)
 
-1. **2단계: 모의 분석 제공자** — 사용자가 시작을 지시하면 진행 (사용자 지시 §7). 새 브랜치(예: `stage-2-mock-analysis`)에서 작업하고, 끝나면 지금까지처럼 독립 검수를 받은 뒤 사용자 승인을 받아 `main` 에 병합한다. 검수 요청 프롬프트는 이전 것([codex-rereview-6-lite-prompt.md](codex-rereview-6-lite-prompt.md))을 참고해 범위를 변경분으로 좁혀 쓴다(토큰 절약). 지적 사항은 코드·실행으로 재현해 확인한 뒤 수정하고, 수정 전 코드에서 회귀 테스트가 실패하는지도 확인한다([reviews/](reviews/README.md) 참조).
-   - 분석 호출을 별도 인터페이스(`AnalysisProvider`)로 분리, 실제 AI 와 모의 분석을 교체 가능하게
-   - 모의 분석은 화면에 `모의 분석 · 개발용` 으로 명확히 표시, 고정 응답을 실제 AI 처럼 보이게 하지 않기
-   - `요청 분석하기` 버튼, 분석 중/실패/재시도, 재분석이 사람의 편집을 덮어쓰지 않도록 사전 확인
-   - DB: `analysis_runs` 테이블 (`0003_*.sql` 로 추가. 적용된 마이그레이션 파일은 수정하지 말 것)
-   - 결과는 항상 `origin='mock'`(또는 `ai`), 검토 전 상태로 저장
-2. **3단계: 실제 AI 연결** — 제공자·인증 방식·사용 비용을 사용자와 확인한 뒤 진행. API 키는 서버에서만 사용, 응답 구조 검증·시간 초과·오류 처리.
+1. **2단계 독립 검수 받기** — [codex-review-stage2-lite-prompt.md](codex-review-stage2-lite-prompt.md) 를 Codex 에 붙여 넣어 요청(범위를 2단계 변경분으로 좁힌 경량 프롬프트). 지적 사항은 코드·실행으로 재현해 확인한 뒤 수정하고, 수정 전 코드에서 회귀 테스트가 실패하는지도 확인한다(지금까지의 방식, [reviews/](reviews/README.md) 참조).
+2. **검수 통과 후, 사용자 승인을 받아** `stage-2-mock-analysis` 를 `main` 에 병합. 병합 전에 새로 clone 한 사본에서 `npm ci` → 타입 검사 → 테스트 → 빌드 → E2E 를 한 번 더 확인한다.
+3. **3단계: 실제 AI 연결** — **시작 전에 사용자와 확인할 것**: 제공자, 인증 방식, 사용 비용. API 키는 서버에서만 사용하고 절대 커밋하지 않는다. 구현은 이미 만들어 둔 `AnalysisProvider` 인터페이스를 구현하고 `server/analysis/registry.ts` 의 `ai` 자리에 연결하면 된다. 응답 구조·원문 근거 검증, 시간 초과, 오류 처리, 결과를 항상 검토 전 제안(`origin='ai'`)으로 저장하는 규칙은 2단계에서 이미 서버에 있다. 3단계에서 새로 필요한 것: 비용·호출 제한, 키 관리, 실제 응답의 품질 검증, `AI 제안` 라벨 표시.
 
 ## 4. 작업 규칙 (사용자 지시, 계속 지킬 것)
 - 한 번에 모든 기능을 만들지 말고 **단계별로** 진행, 단계가 끝나면 실행 가능한 상태로 두고 완료/남은 범위를 보고
@@ -72,6 +69,7 @@ npm run build
 | [requirements.md](requirements.md) | 요구사항 ID ↔ 구현 위치 ↔ 테스트 추적표 |
 | [decisions.md](decisions.md) | 설계 결정, 디자인과 달라진 점, 가정, 검수 반영 결정 |
 | [reports/stage-1.md](reports/stage-1.md) | 1단계 완료 보고, 테스트 결과, 미검증 사항 |
+| [reports/stage-2.md](reports/stage-2.md) | 2단계 완료 보고, 테스트 결과, 미검증 사항 |
 | [reviews/](reviews/README.md) | Codex 독립 검수 보고서 3건(원문) |
 | [codex-review-prompt.md](codex-review-prompt.md) → [rereview](codex-rereview-prompt.md) → [3](codex-rereview-3-prompt.md) → [4](codex-rereview-4-prompt.md) | 검수 요청 프롬프트(최초~4차) |
 | [design/README.md](design/README.md) | 기준 디자인 핸드오프. `request-desk-v2.dc.html` 은 브라우저로 여는 프로토타입 |
@@ -80,7 +78,8 @@ npm run build
 ```
 server/service.ts          규칙(확정·작업 생성·버전·검증)의 중심
 server/app.ts              API 라우트 + 접근 검사(Host/Origin/JSON) + 본문 크기 상한
-server/db/migrations/      0001_init.sql, 0002_review_hardening.sql  (스키마·트리거·뷰)
+server/analysis/          분석 제공자 인터페이스(types), 모의 제공자(mock, mock-data), 실행기(run: 시작·검증·반영·실패 처리)
+server/db/migrations/      0001_init.sql, 0002_review_hardening.sql, 0003_analysis_runs.sql  (스키마·트리거·뷰)
 shared/validation.ts       서버·웹 공용 입력 검증(의미 없는 입력, 길이 상한, 모호한 완료 조건)
 web/src/pages/            RequestsPage, RequestDetailPage(+ItemSection, Dialogs), TasksPage, useSaver(저장 상태·재시도)
 tests/server/              규칙·DB 직접 SQL·접근 검사·검수 회귀
@@ -96,3 +95,4 @@ tests/e2e/                 flow.spec.ts(주요 흐름) · recovery.spec.ts(저�
 | 4차 | 836b4ea | R3(저장 중 되돌리기 유실), R4(인용문만 수정 시 본문 덮어쓰기) | (이 커밋) |
 | 5차 | 39006ad | P1(재시도 중 되돌리기 유실), P2(테스트 고정 지연), 완료 조건 동시 편집(조건부 수용) | (이 커밋) |
 | 6차 | a213429 | **병합 차단 문제 없음** (P1·P2·삭제 항목 보존 수정됨, 완료 조건 동시 편집 수용 타당) | — (`main` 병합 완료) |
+| 2단계 | — | **검수 대기** | — |

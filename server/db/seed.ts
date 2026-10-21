@@ -2,34 +2,16 @@ import type { Db } from './open.ts';
 import { tx } from './open.ts';
 import * as svc from '../service.ts';
 
+import { MORNING_ANALYSIS, MORNING_ORIGINAL } from '../analysis/mock-data.ts';
+
 // 기준 디자인(README) 샘플. 1단계에는 AI 가 없으므로 샘플 분석 항목은 origin='mock'(모의 제안)으로 넣는다.
 const MORNING = {
   title: '홈페이지 예약 기능 추가',
   customerName: '모닝 스튜디오',
-  originalText:
-    '홈페이지에서 촬영 예약을 받았으면 좋겠어요. 가능한 날짜를 보고 신청하게 하고, 예약이 들어오면 제가 확인할 수 있으면 좋겠어요.',
+  originalText: MORNING_ORIGINAL,
 };
 
-export const MORNING_ANALYSIS = {
-  reqs: [
-    { content: '예약 가능한 날짜 조회', quote: '가능한 날짜를 보고' },
-    { content: '고객의 촬영 예약 신청', quote: '홈페이지에서 촬영 예약을 받았으면 좋겠어요' },
-    { content: '운영자의 예약 내역 확인', quote: '예약이 들어오면 제가 확인할 수 있으면 좋겠어요' },
-  ],
-  questions: [
-    { content: '촬영 상품마다 소요 시간이 다른가요?', note: '날짜 단위로 받을지, 시간 단위로 받을지 정하는 데 필요해요.' },
-    {
-      content: '예약 즉시 확정인가요, 운영자 승인 후 확정인가요?',
-      note: '‘제가 확인할 수 있으면’이 단순 조회인지 승인 절차인지 원문만으로는 알 수 없어요.',
-    },
-    { content: '결제가 필요한가요?', note: '원문에 결제 언급이 없어요. 답변 전까지 기능에 넣지 않아요.' },
-  ],
-  unknowns: [
-    { content: '로그인 필요 여부', note: '예약자 정보를 어떻게 받을지 정해지지 않았어요.' },
-    { content: '취소와 변경 규칙', note: '원문에 언급이 없어요.' },
-    { content: '예약 알림 방식', note: '‘확인할 수 있으면’이 알림까지 뜻하는지 정해지지 않았어요.' },
-  ],
-};
+export { MORNING_ANALYSIS };
 
 export function addMorningAnalysis(db: Db, requestId: string) {
   tx(db, () => {

@@ -5,7 +5,7 @@ import { notifyChanged } from '../App.tsx';
 import type { AnalysisItem, ItemKind, RequestDetail } from '../../../shared/types.ts';
 import { checkItemContent, checkNote } from '../../../shared/validation.ts';
 import { ReqBadge, Spinner, TaskBadge, fmtDate, useToast } from '../ui.tsx';
-import { ConfirmDialog, ReopenDialog, TaskModal } from './Dialogs.tsx';
+import { ConfirmDialog, ReanalyzeDialog, ReopenDialog, TaskModal } from './Dialogs.tsx';
 import { ItemSection, type FormState } from './ItemSection.tsx';
 import { RequestPanel } from './RequestPanel.tsx';
 import { useSaver } from './useSaver.ts';
@@ -16,7 +16,7 @@ type StepMsg = {
   msg: string;
   link?: { label: string; onClick: () => void };
   primary?: { label: string; onClick: () => void };
-  disabled?: { label: string };
+  disabled?: { label: string; spin?: boolean };
   secondary?: { label: string; onClick: () => void };
 };
 
@@ -40,6 +40,10 @@ export function RequestDetailPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
+  const [reanalyzeOpen, setReanalyzeOpen] = useState(false);
+  const [starting, setStarting] = useState(false); // 분석 시작 요청을 보내는 중
+  const startingRef = useRef(false);
+  const watchedRun = useRef<string | null>(null); // 이 화면에서 진행 중인 것을 본 분석 실행 id
   const formRef = useRef<FormState | null>(null);
   formRef.current = form;
   const commitFormRef = useRef<() => Promise<void>>(async () => {});
@@ -291,6 +295,60 @@ export function RequestDetailPage() {
     }
   }
 
+  // ───── 분석(2단계) ─────
+  const provider = d?.analysis.provider ?? null;
+  const latestRun = d?.analysis.latestRun ?? null;
+  const running = starting || latestRun?.status === 'running';
+
+  async function startAnalyze(confirmReanalysis: boolean) {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
+    try {
+      await api.analyze(id, confirmReanalysis);
+      setReanalyzeOpen(false);
+      await reload();
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.code === 'reanalysis_confirmation_required') {
+        setReanalyzeOpen(true); // 서버가 사용자 확인을 요구하면 확인창을 연다
+      } else {
+        setReanalyzeOpen(false);
+        toast(err.retryable ? '분석을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.' : err.message);
+        if (err.code === 'analysis_running' || err.code === 'locked_confirmed') await reload();
+      }
+    } finally {
+      startingRef.current = false;
+      setStarting(false);
+    }
+  }
+
+  // 분석이 진행 중이면 결과를 주기적으로 확인한다.
+  useEffect(() => {
+    if (latestRun?.status !== 'running') return;
+    watchedRun.current = latestRun.id;
+    const t = window.setInterval(() => void reload(), 700);
+    return () => window.clearInterval(t);
+  }, [latestRun?.status, latestRun?.id, reload]);
+
+  // 이 화면에서 진행 중이던 분석이 끝난 순간에만 알려 준다(이미 끝난 예전 기록은 알리지 않는다).
+  useEffect(() => {
+    if (!latestRun || latestRun.status === 'running' || watchedRun.current !== latestRun.id) return;
+    watchedRun.current = null;
+    const who = provider?.isMock ? '모의 분석' : '분석';
+    if (latestRun.status === 'succeeded') {
+      const n = latestRun.itemCount ?? 0;
+      const skipped = latestRun.skippedCount ?? 0;
+      toast(
+        n > 0
+          ? `${who}이 끝났어요. 제안 ${n}개를 ‘검토 전’으로 추가했어요.${skipped ? ` 근거가 맞지 않는 제안 ${skipped}개는 제외했어요.` : ''}`
+          : `${who}이 끝났어요. 새로 추가할 제안이 없었어요.${skipped ? ` (근거가 맞지 않는 제안 ${skipped}개 제외)` : ''}`,
+      );
+    } else if (hasItems) {
+      toast(latestRun.errorMessage ?? '분석에 실패했어요.');
+    }
+  }, [latestRun, provider?.isMock, hasItems, toast]);
+
   // ───── 화면 계산 ─────
   const step: StepMsg = useMemo(() => {
     if (confirmed) {
@@ -303,18 +361,32 @@ export function RequestDetailPage() {
       }
       return { step: 3, msg: '작업으로 만들 요구사항을 하나 이상 선택해 주세요.', link: reopenLink, disabled: { label: '작업 만들기' } };
     }
-    if (!hasItems && !started) {
+    if (running) {
       return {
-        step: 1,
-        msg: '원문을 읽고 요구사항·확인할 질문·미확정 사항을 직접 나눠 적어요. 적은 내용은 검토하기 전까지 확정되지 않아요.',
-        primary: { label: '분석 항목 직접 작성하기', onClick: () => setStarted(true) },
+        step: hasItems ? 2 : 1,
+        msg: '원문을 분석하고 있어요. 그동안 원문을 계속 읽을 수 있어요.',
+        disabled: { label: '분석 중…', spin: true },
       };
     }
-    if (pendingCount > 0) return { step: 2, msg: `검토 전 항목이 ${pendingCount}개 남아 있어요. 모두 검토해야 확정할 수 있어요.`, disabled: { label: '검토 완료하고 확정' } };
-    if (reqs.length === 0) return { step: 2, msg: '확정할 요구사항이 없어요. 요구사항을 추가해 주세요.', disabled: { label: '검토 완료하고 확정' } };
-    if (badQuote) return { step: 2, msg: '원문에서 근거 문장을 찾을 수 없는 요구사항이 있어요. 근거가 맞는지 확인하거나 수정해 주세요.', disabled: { label: '검토 완료하고 확정' } };
-    return { step: 2, msg: '확정하면 요구사항이 고정돼요. 작업은 다음 단계에서 따로 만들어요.', primary: { label: '검토 완료하고 확정', onClick: () => setConfirmOpen(true) } };
-  }, [confirmed, selectableIds, selectedCount, hasItems, started, pendingCount, reqs.length, badQuote, nav]);
+    if (!hasItems && !started) {
+      const failed = latestRun?.status === 'failed';
+      return {
+        step: 1,
+        msg: failed
+          ? '분석에 실패했어요. 원문은 그대로 남아 있어요.'
+          : provider?.isMock
+            ? '모의 분석이 원문을 요구사항·확인할 질문·미확정 사항으로 나눠 제안해요(개발용 고정 결과). 제안은 자동으로 확정되지 않아요.'
+            : 'AI가 원문을 요구사항·확인할 질문·미확정 사항으로 나눠 제안해요. 제안은 자동으로 확정되지 않아요.',
+        link: { label: '분석 항목 직접 작성하기', onClick: () => setStarted(true) },
+        primary: { label: failed ? '다시 시도' : '요청 분석하기', onClick: () => void startAnalyze(false) },
+      };
+    }
+    const reanalyzeLink = hasItems ? { label: '다시 분석하기', onClick: () => setReanalyzeOpen(true) } : undefined;
+    if (pendingCount > 0) return { step: 2, msg: `검토 전 항목이 ${pendingCount}개 남아 있어요. 모두 검토해야 확정할 수 있어요.`, link: reanalyzeLink, disabled: { label: '검토 완료하고 확정' } };
+    if (reqs.length === 0) return { step: 2, msg: '확정할 요구사항이 없어요. 요구사항을 추가해 주세요.', link: reanalyzeLink, disabled: { label: '검토 완료하고 확정' } };
+    if (badQuote) return { step: 2, msg: '원문에서 근거 문장을 찾을 수 없는 요구사항이 있어요. 근거가 맞는지 확인하거나 수정해 주세요.', link: reanalyzeLink, disabled: { label: '검토 완료하고 확정' } };
+    return { step: 2, msg: '확정하면 요구사항이 고정돼요. 작업은 다음 단계에서 따로 만들어요.', link: reanalyzeLink, primary: { label: '검토 완료하고 확정', onClick: () => setConfirmOpen(true) } };
+  }, [confirmed, selectableIds, selectedCount, hasItems, started, pendingCount, reqs.length, badQuote, nav, running, latestRun?.status, provider?.isMock]);
 
   // 원문 하이라이트 조각
   const segments = useMemo(() => {
@@ -470,6 +542,7 @@ export function RequestDetailPage() {
           )}
           {step.disabled && (
             <button type="button" className="btn btn-lg" disabled>
+              {step.disabled.spin && <Spinner />}
               {step.disabled.label}
             </button>
           )}
@@ -562,12 +635,48 @@ export function RequestDetailPage() {
         </section>
 
         <section className="col-right" aria-label="분석과 검토">
-          {!showAnalysis && (
+          {provider?.isMock && (
+            <div className="notice notice-warn" data-testid="mock-banner">
+              <strong>모의 분석 · 개발용</strong> — 실제 AI 분석이 아니라 미리 정해 둔 샘플 결과예요. 제안은 모두 ‘모의 제안 · 검토 전’으로 들어가요.
+            </div>
+          )}
+          {running && !showAnalysis && (
+            <div className="a-card" role="status" aria-label="분석 중">
+              <div className="hint">명시된 요구사항</div>
+              <div className="skel" style={{ width: '72%' }} />
+              <div className="skel" style={{ width: '58%' }} />
+              <div className="hint" style={{ marginTop: 6 }}>확인할 질문</div>
+              <div className="skel" style={{ width: '64%' }} />
+              <div className="hint" style={{ marginTop: 6 }}>미확정 사항</div>
+              <div className="skel" style={{ width: '48%' }} />
+            </div>
+          )}
+          {running && showAnalysis && (
+            <div className="notice" role="status" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Spinner /> 분석하는 중이에요. 기존 항목은 그대로 두고 새 제안만 ‘검토 전’으로 추가해요.
+            </div>
+          )}
+          {!running && !showAnalysis && latestRun?.status === 'failed' && (
+            <div className="a-card err" role="alert">
+              <h3>분석 결과를 받지 못했어요</h3>
+              <p>일시적인 문제일 수 있어요. 원문은 그대로 남아 있으니 위의 ‘다시 시도’를 눌러 주세요.</p>
+              {latestRun.errorMessage && <p className="hint">{latestRun.errorMessage}</p>}
+            </div>
+          )}
+          {!running && !showAnalysis && latestRun?.status !== 'failed' && (
             <div className="a-card">
               <h3>아직 분석하지 않았어요</h3>
               <p>
-                위의 ‘분석 항목 직접 작성하기’를 누르면 원문을 읽고 명시된 요구사항, 확인할 질문, 미확정 사항을 직접 적을 수 있어요. 적은 내용은 검토하기 전까지 확정되지 않아요.
+                위의 ‘요청 분석하기’를 누르면 원문을 명시된 요구사항, 확인할 질문, 미확정 사항으로 나눠 제안해요. 제안은 검토하기 전까지 확정되지 않아요. 직접 정리하려면 ‘분석 항목 직접 작성하기’를 누르세요.
               </p>
+            </div>
+          )}
+          {!running && showAnalysis && !confirmed && latestRun?.status === 'failed' && (
+            <div className="notice notice-err" role="alert">
+              <strong>마지막 분석에 실패했어요.</strong> {latestRun.errorMessage} 이미 있는 항목은 그대로예요.{' '}
+              <button type="button" className="btn-retry" onClick={() => setReanalyzeOpen(true)}>
+                다시 시도
+              </button>
             </div>
           )}
           {showAnalysis && (
@@ -607,6 +716,15 @@ export function RequestDetailPage() {
         />
       )}
       {reopenOpen && <ReopenDialog onClose={() => setReopenOpen(false)} onConfirm={reopen} />}
+      {reanalyzeOpen && (
+        <ReanalyzeDialog
+          itemCount={items.length}
+          isMock={!!provider?.isMock}
+          busy={starting}
+          onClose={() => setReanalyzeOpen(false)}
+          onConfirm={() => void startAnalyze(true)}
+        />
+      )}
       {taskOpen && latest && (
         <TaskModal
           request={r}
