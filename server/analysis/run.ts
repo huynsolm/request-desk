@@ -6,7 +6,8 @@ import { insertItem } from '../service.ts';
 import { checkItemContent, MAX, normalizeNewlines } from '../../shared/validation.ts';
 import type { AnalysisRunSummary } from '../../shared/types.ts';
 import { runFromRow } from './summary.ts';
-import { AnalysisResultSchema, type AnalysisProvider } from './types.ts';
+import { usageOf } from './usage.ts';
+import { AnalysisResultSchema, ProviderError, type AnalysisProvider, type UsageReport } from './types.ts';
 
 type Row = Record<string, any>;
 const now = () => new Date().toISOString();
@@ -23,11 +24,13 @@ export function failStaleRuns(db: Db): number {
   return Number(res.changes);
 }
 
-function markFailed(db: Db, runId: string, code: string, message: string) {
+// 끝난 실행 기록은 트리거로 수정할 수 없으므로, 사용량(모델·토큰)은 실행을 끝내는 UPDATE 에서 함께 기록한다.
+function markFailed(db: Db, runId: string, code: string, message: string, usage?: UsageReport | null) {
   db.prepare(
-    `UPDATE analysis_runs SET status = 'failed', error_code = ?, error_message = ?, finished_at = ?
+    `UPDATE analysis_runs SET status = 'failed', error_code = ?, error_message = ?, finished_at = ?,
+       model = ?, input_tokens = ?, output_tokens = ?
      WHERE id = ? AND status = 'running'`,
-  ).run(code, message, now(), runId);
+  ).run(code, message, now(), usage?.model ?? null, usage?.inputTokens ?? null, usage?.outputTokens ?? null, runId);
 }
 
 // 중복 비교용 정규화: 공백 제거·소문자·유니코드 NFC. 시각적으로 같은 글자(예: é 와 e+결합 악센트, 한글 자모 분리형)를 같은 것으로 본다.
@@ -39,16 +42,22 @@ const norm = (s: string) => s.normalize('NFC').replace(/\s+/g, '').toLowerCase()
  * - 이미 있는 항목과 같은 제안은 건너뛴다(재분석 시 중복 방지).
  * - 요구사항은 원문에 실제로 있는 인용문이 있어야 한다(없으면 제외). 의미 없는 내용도 제외한다.
  */
-function applyResult(db: Db, provider: AnalysisProvider, runId: string, result: ReturnType<typeof AnalysisResultSchema.parse>) {
+function applyResult(
+  db: Db,
+  provider: AnalysisProvider,
+  runId: string,
+  result: ReturnType<typeof AnalysisResultSchema.parse>,
+  usage: UsageReport | null,
+) {
   tx(db, () => {
     const run = db.prepare('SELECT * FROM analysis_runs WHERE id = ?').get(runId) as Row;
     if (run.status !== 'running') return;
     const req = db.prepare('SELECT * FROM requests WHERE id = ?').get(run.request_id) as Row;
     if (req.phase === 'confirmed') {
-      return markFailed(db, runId, 'locked_confirmed', '분석하는 사이에 요구사항이 확정되어 결과를 반영하지 않았어요.');
+      return markFailed(db, runId, 'locked_confirmed', '분석하는 사이에 요구사항이 확정되어 결과를 반영하지 않았어요.', usage);
     }
     if (req.original_rev !== run.original_rev) {
-      return markFailed(db, runId, 'original_changed', '분석하는 사이에 원문이 바뀌어 결과를 반영하지 않았어요. 다시 분석해 주세요.');
+      return markFailed(db, runId, 'original_changed', '분석하는 사이에 원문이 바뀌어 결과를 반영하지 않았어요. 다시 분석해 주세요.', usage);
     }
     const original = normalizeNewlines(req.original_text as string);
     const seen = new Set<string>();
@@ -101,7 +110,7 @@ function applyResult(db: Db, provider: AnalysisProvider, runId: string, result: 
     // 통과한 제안이 하나도 없는데 검증 실패가 있으면, 첫 분석이든 재분석이든 "성공"으로 기록하지 않는다.
     // (이미 있는 것과 같아 건너뛴 중복은 통과한 제안이므로 여기에 걸리지 않는다.)
     if (valid === 0 && skipped > 0) {
-      return markFailed(db, runId, 'invalid_response', '분석 결과가 올바르지 않아 반영하지 않았어요.');
+      return markFailed(db, runId, 'invalid_response', '분석 결과가 올바르지 않아 반영하지 않았어요.', usage);
     }
     if (inserted === 0 && !run.reanalysis) {
       return markFailed(
@@ -109,12 +118,14 @@ function applyResult(db: Db, provider: AnalysisProvider, runId: string, result: 
         runId,
         skipped > 0 ? 'invalid_response' : 'empty_result',
         skipped > 0 ? '분석 결과가 올바르지 않아 반영하지 않았어요.' : '분석 결과가 비어 있어요.',
+        usage,
       );
     }
     db.prepare(
-      `UPDATE analysis_runs SET status = 'succeeded', item_count = ?, skipped_count = ?, finished_at = ?
+      `UPDATE analysis_runs SET status = 'succeeded', item_count = ?, skipped_count = ?, finished_at = ?,
+         model = ?, input_tokens = ?, output_tokens = ?
        WHERE id = ? AND status = 'running'`,
-    ).run(inserted, skipped, now(), runId);
+    ).run(inserted, skipped, now(), usage?.model ?? null, usage?.inputTokens ?? null, usage?.outputTokens ?? null, runId);
   });
 }
 
@@ -136,21 +147,32 @@ async function execute(
 ): Promise<void> {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
+  let usage = null as UsageReport | null; // 제공자가 알려 준 사용량(시간 초과·오류로 끝나도 이미 쓴 토큰은 기록한다)
   try {
     let raw: unknown;
     try {
-      raw = await raceAbort(provider.analyze(input, { signal: ac.signal }), ac.signal);
-    } catch {
+      raw = await raceAbort(
+        provider.analyze(input, {
+          signal: ac.signal,
+          reportUsage: (u) => {
+            usage = u;
+          },
+        }),
+        ac.signal,
+      );
+    } catch (e) {
       if (ac.signal.aborted) {
-        return markFailed(db, runId, 'timeout', '분석 시간이 너무 오래 걸려 중단했어요. 다시 시도해 주세요.');
+        return markFailed(db, runId, 'timeout', '분석 시간이 너무 오래 걸려 중단했어요. 다시 시도해 주세요.', usage);
       }
-      return markFailed(db, runId, 'provider_error', '분석을 하지 못했어요. 잠시 후 다시 시도해 주세요.'); // 제공자의 내부 오류 내용은 노출하지 않는다
+      // 제공자가 "보여도 되는" 사유(ProviderError)를 준 경우에만 그 문구를 쓴다. 그 밖의 오류 내용은 노출하지 않는다.
+      if (e instanceof ProviderError) return markFailed(db, runId, e.code, e.message, usage);
+      return markFailed(db, runId, 'provider_error', '분석을 하지 못했어요. 잠시 후 다시 시도해 주세요.', usage);
     }
     const parsed = AnalysisResultSchema.safeParse(raw);
     if (!parsed.success) {
-      return markFailed(db, runId, 'invalid_response', '분석 결과가 올바르지 않아 반영하지 않았어요.');
+      return markFailed(db, runId, 'invalid_response', '분석 결과가 올바르지 않아 반영하지 않았어요.', usage);
     }
-    applyResult(db, provider, runId, parsed.data);
+    applyResult(db, provider, runId, parsed.data, usage);
   } catch {
     try {
       markFailed(db, runId, 'internal', '분석 결과를 저장하지 못했어요. 다시 시도해 주세요.');
@@ -165,6 +187,8 @@ async function execute(
 export interface StartOptions {
   confirmReanalysis?: boolean;
   timeoutMs: number;
+  /** 테스트에서 날짜를 고정하기 위한 시각 공급자(기본: 현재 시각). */
+  clock?: () => Date;
 }
 
 /**
@@ -196,12 +220,22 @@ export function startAnalysis(
         `이미 분석 항목이 ${existing}개 있어요. 다시 분석하면 기존 항목은 그대로 두고 새 제안만 ‘검토 전’으로 추가해요.`,
       );
     }
+    // 비용이 드는 제공자는 호출 횟수 상한을 서버가 직접 지킨다(화면에서 버튼을 막는 것과 별개로).
+    const usage = usageOf(db, provider, opts.clock?.());
+    if (usage) {
+      if (usage.daily.used >= usage.daily.limit) {
+        throw new AppError(429, 'usage_limit', `오늘 AI 분석 횟수(${usage.daily.limit}회)를 모두 썼어요. 내일 다시 시도하거나, 직접 작성해 주세요.`);
+      }
+      if (usage.monthly.used >= usage.monthly.limit) {
+        throw new AppError(429, 'usage_limit', `이번 달 AI 분석 횟수(${usage.monthly.limit}회)를 모두 썼어요. 다음 달에 다시 시도하거나, 직접 작성해 주세요.`);
+      }
+    }
     const id = randomUUID();
     try {
       db.prepare(
         `INSERT INTO analysis_runs (id, request_id, provider, status, original_rev, reanalysis, started_at)
          VALUES (?, ?, ?, 'running', ?, ?, ?)`,
-      ).run(id, requestId, provider.id, req.original_rev, history > 0 ? 1 : 0, now());
+      ).run(id, requestId, provider.id, req.original_rev, history > 0 ? 1 : 0, (opts.clock?.() ?? new Date()).toISOString());
     } catch (e) {
       if (e instanceof Error && e.message.includes('UNIQUE constraint failed: analysis_runs.request_id')) {
         throw new AppError(409, 'analysis_running', '이미 분석이 진행 중이에요.');

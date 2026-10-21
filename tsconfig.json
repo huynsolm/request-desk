@@ -15,5 +15,5 @@
     "isolatedModules": true,
     "types": ["node"]
   },
-  "include": ["server", "shared", "web/src", "tests", "web/vite.config.ts", "playwright.config.ts", "vitest.config.ts"]
+  "include": ["server", "shared", "web/src", "tests", "scripts", "playwright.ai.config.ts", "web/vite.config.ts", "playwright.config.ts", "vitest.config.ts"]
 }

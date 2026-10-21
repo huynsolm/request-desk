@@ -75,7 +75,7 @@ describe('모의 분석 결과', () => {
     const env = makeEnv();
     const rid = await newRequest(env);
     const d = await detail(env, rid);
-    expect(d.analysis.provider).toEqual({ id: 'mock', label: '모의 분석 · 개발용', isMock: true });
+    expect(d.analysis.provider).toEqual({ id: 'mock', label: '모의 분석 · 개발용', isMock: true, sendsDataTo: null });
     expect(d.analysis.latestRun).toBeNull();
   });
 });

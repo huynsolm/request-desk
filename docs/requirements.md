@@ -64,6 +64,21 @@ Codex 등 독립 검수자가 "요구사항 → 구현 → 검증"을 따라갈 
 | R-ANALYZE-18 | 재분석 여부는 삭제한 항목까지 포함한 분석 이력으로 판정한다(사용자 확인 필요 여부는 화면에 보이는 항목 수로 판정). 항목을 모두 지운 뒤 다시 분석해도 삭제한 제안은 되살리지 않고, 새 제안 0개는 실패가 아니라 성공 | `startAnalysis`(`existing`/`history`) | `analysis.test.ts` [R-ANALYZE-18] |
 | R-ANALYZE-19 | 중복 비교는 유니코드 NFC 로 정규화한다(시각적으로 같은 글자를 같은 제안으로 봄) | `norm()` | `analysis.test.ts` [R-ANALYZE-19] |
 | R-ANALYZE-16 | 좁은 화면(375px)에서 분석 전·중·후 화면이 잘리지 않는다 | `styles.css` | E2E-A7 |
+| R-AI-01 | AI 분석 결과는 항상 `AI 제안 · 검토 전`(origin=ai)으로 저장되고, 실행 기록에 모델·입출력 토큰이 남는다. AI 결과만으로 확정되지 않는다 | `AnthropicAnalysisProvider`, `applyResult`, 0004 | `anthropic.test.ts` [R-AI-01], E2E-AI1 |
+| R-AI-02 | 외부로는 요청 원문만 보낸다(제목·고객명 제외). API 키는 서버에서 헤더로만 사용된다 | `anthropic.ts` | [R-AI-02], E2E-AI1 |
+| R-AI-03 | 원문 속 지시문은 데이터로만 전달(경계 문자열)되고, 그 때문에 AI 가 만든 원문에 없는 요구사항은 근거 검증에서 제외된다 | 프롬프트, `applyResult` | [R-AI-03] |
+| R-AI-04 | 키 오류 시 "API 키 확인" 안내만 보이고, 키·제공자 원문 오류 메시지는 응답·로그 어디에도 없다 | `toProviderError` | [R-AI-04], E2E-AI2 |
+| R-AI-05 | 429·5xx·네트워크 오류는 구분된 안전한 문구로 실패하고 항목이 생기지 않는다. 자동 재시도는 1회뿐 | `maxRetries: 1` | [R-AI-05] |
+| R-AI-06 | 형식이 틀린 응답(JSON 아님·필드 누락)은 `invalid_response`, 잘림은 `truncated` 로 실패하며 항목을 만들지 않는다. 쓴 토큰은 기록 | `analyze`, `AnalysisResultSchema` | [R-AI-06] |
+| R-AI-07 | AI 가 거절(refusal)하면 안내하고 직접 작성하게 한다 | `analyze` | [R-AI-07] |
+| R-AI-08 | 응답이 없으면 시간 초과로 끝나고 진행 중으로 남지 않아 다시 분석할 수 있다 | `execute` | [R-AI-08] |
+| R-AI-09 | 하루 호출 상한(기본 20)을 서버가 강제(429 `usage_limit`, 외부 호출·실행 기록 없음). 날짜가 바뀌면 다시 가능 | `startAnalysis`, `usageOf` | [R-AI-09], E2E-AI3 |
+| R-AI-10 | 한 달 상한(기본 300). 실패한 호출도 센다. 다음 달 다시 가능 | 〃 | [R-AI-10] |
+| R-AI-11 | 모의 분석은 횟수 제한·사용량 표시·전송 안내가 없다 | 〃 | [R-AI-11] |
+| R-AI-12 | `ai` 제공자는 키가 없으면 시작하지 않는다(안내에 키 값 없음) | `registry.ts` | [R-AI-12] |
+| R-AI-13 | 테스트용 BASE URL 은 localhost 만 허용(키가 다른 곳으로 가지 않게) | `assertSafeBaseUrl` | [R-AI-13] |
+| R-AI-14 | 사용량 상한 환경 변수가 잘못되면 시작하지 않는다 | `positiveInt` | [R-AI-14] |
+| R-AI-15 | AI 제공자일 때 화면에 원문 전송 안내와 사용량을 표시하고, 한도에 닿으면 버튼을 막는다(서버도 막음) | `RequestDetailPage` | E2E-AI1, E2E-AI3 |
 
 ## 범위 밖(다음 단계)
 

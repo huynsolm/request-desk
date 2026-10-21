@@ -299,6 +299,15 @@ export function RequestDetailPage() {
   const provider = d?.analysis.provider ?? null;
   const latestRun = d?.analysis.latestRun ?? null;
   const running = starting || latestRun?.status === 'running';
+  // 실제 AI: 호출 횟수 상한. 서버도 막지만(429), 화면에서도 미리 알려 불필요한 호출 시도를 줄인다.
+  const usage = d?.analysis.usage ?? null;
+  const limitMsg = usage
+    ? usage.daily.used >= usage.daily.limit
+      ? `오늘 AI 분석 횟수(${usage.daily.limit}회)를 모두 썼어요. 내일 다시 시도하거나 직접 작성해 주세요.`
+      : usage.monthly.used >= usage.monthly.limit
+        ? `이번 달 AI 분석 횟수(${usage.monthly.limit}회)를 모두 썼어요. 다음 달에 다시 시도하거나 직접 작성해 주세요.`
+        : null
+    : null;
 
   async function startAnalyze(confirmReanalysis: boolean) {
     if (startingRef.current) return;
@@ -335,7 +344,7 @@ export function RequestDetailPage() {
   useEffect(() => {
     if (!latestRun || latestRun.status === 'running' || watchedRun.current !== latestRun.id) return;
     watchedRun.current = null;
-    const who = provider?.isMock ? '모의 분석' : '분석';
+    const who = provider?.isMock ? '모의 분석' : provider?.id === 'ai' ? 'AI 분석' : '분석';
     if (latestRun.status === 'succeeded') {
       const n = latestRun.itemCount ?? 0;
       const skipped = latestRun.skippedCount ?? 0;
@@ -370,23 +379,27 @@ export function RequestDetailPage() {
     }
     if (!hasItems && !started) {
       const failed = latestRun?.status === 'failed';
-      return {
-        step: 1,
-        msg: failed
-          ? '분석에 실패했어요. 원문은 그대로 남아 있어요.'
-          : provider?.isMock
-            ? '모의 분석이 원문을 요구사항·확인할 질문·미확정 사항으로 나눠 제안해요(개발용 고정 결과). 제안은 자동으로 확정되지 않아요.'
-            : 'AI가 원문을 요구사항·확인할 질문·미확정 사항으로 나눠 제안해요. 제안은 자동으로 확정되지 않아요.',
+      const base = {
+        step: 1 as const,
+        msg: limitMsg
+          ? limitMsg
+          : failed
+            ? '분석에 실패했어요. 원문은 그대로 남아 있어요.'
+            : provider?.isMock
+              ? '모의 분석이 원문을 요구사항·확인할 질문·미확정 사항으로 나눠 제안해요(개발용 고정 결과). 제안은 자동으로 확정되지 않아요.'
+              : `AI가 원문을 요구사항·확인할 질문·미확정 사항으로 나눠 제안해요. 누르면 요청 원문이 ${provider?.sendsDataTo ?? '외부 서비스'}로 전송돼요. 제안은 자동으로 확정되지 않아요.`,
         link: { label: '분석 항목 직접 작성하기', onClick: () => setStarted(true) },
-        primary: { label: failed ? '다시 시도' : '요청 분석하기', onClick: () => void startAnalyze(false) },
       };
+      return limitMsg
+        ? { ...base, disabled: { label: '분석 한도 도달' } }
+        : { ...base, primary: { label: failed ? '다시 시도' : '요청 분석하기', onClick: () => void startAnalyze(false) } };
     }
-    const reanalyzeLink = hasItems ? { label: '다시 분석하기', onClick: () => setReanalyzeOpen(true) } : undefined;
+    const reanalyzeLink = hasItems && !limitMsg ? { label: '다시 분석하기', onClick: () => setReanalyzeOpen(true) } : undefined;
     if (pendingCount > 0) return { step: 2, msg: `검토 전 항목이 ${pendingCount}개 남아 있어요. 모두 검토해야 확정할 수 있어요.`, link: reanalyzeLink, disabled: { label: '검토 완료하고 확정' } };
     if (reqs.length === 0) return { step: 2, msg: '확정할 요구사항이 없어요. 요구사항을 추가해 주세요.', link: reanalyzeLink, disabled: { label: '검토 완료하고 확정' } };
     if (badQuote) return { step: 2, msg: '원문에서 근거 문장을 찾을 수 없는 요구사항이 있어요. 근거가 맞는지 확인하거나 수정해 주세요.', link: reanalyzeLink, disabled: { label: '검토 완료하고 확정' } };
     return { step: 2, msg: '확정하면 요구사항이 고정돼요. 작업은 다음 단계에서 따로 만들어요.', link: reanalyzeLink, primary: { label: '검토 완료하고 확정', onClick: () => setConfirmOpen(true) } };
-  }, [confirmed, selectableIds, selectedCount, hasItems, started, pendingCount, reqs.length, badQuote, nav, running, latestRun?.status, provider?.isMock]);
+  }, [confirmed, selectableIds, selectedCount, hasItems, started, pendingCount, reqs.length, badQuote, nav, running, latestRun?.status, provider?.isMock, provider?.sendsDataTo, limitMsg]);
 
   // 원문 하이라이트 조각
   const segments = useMemo(() => {
@@ -640,6 +653,21 @@ export function RequestDetailPage() {
               <strong>모의 분석 · 개발용</strong> — 실제 AI 분석이 아니라 미리 정해 둔 샘플 결과예요. 제안은 모두 ‘모의 제안 · 검토 전’으로 들어가요.
             </div>
           )}
+          {provider?.sendsDataTo && (
+            <div className="notice" data-testid="ai-notice">
+              <strong>AI 분석</strong> — ‘분석하기’를 누르면 이 요청의 <strong>원문</strong>이 {provider.sendsDataTo}로 전송돼요(제목·고객명은 보내지 않아요). 결과는 모두 ‘AI 제안 · 검토 전’으로 들어가고, 사람이 검토하기 전에는 확정되지 않아요.
+              {usage && (
+                <div className="hint" data-testid="ai-usage" style={{ marginTop: 4 }}>
+                  오늘 {usage.daily.used}/{usage.daily.limit}회 · 이번 달 {usage.monthly.used}/{usage.monthly.limit}회 사용
+                </div>
+              )}
+              {limitMsg && (
+                <div role="alert" data-testid="ai-limit" style={{ marginTop: 4 }}>
+                  <strong>{limitMsg}</strong>
+                </div>
+              )}
+            </div>
+          )}
           {running && !showAnalysis && (
             <div className="a-card" role="status" aria-label="분석 중">
               <div className="hint">명시된 요구사항</div>
@@ -720,6 +748,7 @@ export function RequestDetailPage() {
         <ReanalyzeDialog
           itemCount={items.length}
           isMock={!!provider?.isMock}
+          sendsDataTo={provider?.sendsDataTo ?? null}
           busy={starting}
           onClose={() => setReanalyzeOpen(false)}
           onConfirm={() => void startAnalyze(true)}

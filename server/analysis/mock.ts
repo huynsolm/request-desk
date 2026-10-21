@@ -27,6 +27,8 @@ export class MockAnalysisProvider implements AnalysisProvider {
   readonly id = 'mock' as const;
   readonly label = '모의 분석 · 개발용';
   readonly isMock = true;
+  readonly sendsDataTo = null;
+  readonly limits = undefined;
   readonly controls: MockControls;
 
   constructor(controls: Partial<MockControls> = {}) {

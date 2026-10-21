@@ -309,12 +309,14 @@ export function TaskModal({
 export function ReanalyzeDialog({
   itemCount,
   isMock,
+  sendsDataTo,
   busy,
   onClose,
   onConfirm,
 }: {
   itemCount: number;
   isMock: boolean;
+  sendsDataTo: string | null;
   busy: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -329,6 +331,11 @@ export function ReanalyzeDialog({
         <div className="dashed-note">
           <strong>기존 항목은 그대로 두고</strong>, 새 제안만 ‘검토 전’으로 추가해요. 직접 고치거나 검토한 항목, 답변·결정을 기록한 항목, 삭제한 항목은 건드리지 않고, 이미 있는 제안과 같은 것은 다시 만들지 않아요.
         </div>
+        {sendsDataTo && (
+          <div className="hint" data-testid="reanalyze-send-notice">
+            요청 원문이 {sendsDataTo}로 다시 전송되고, AI 호출 1회로 세어져요.
+          </div>
+        )}
         {isMock && (
           <div className="hint">모의 분석은 같은 샘플 결과를 돌려주므로 새로 추가되는 제안이 없을 수도 있어요.</div>
         )}

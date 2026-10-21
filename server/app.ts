@@ -4,6 +4,7 @@ import type { Db } from './db/open.ts';
 import { AppError, translateDbError } from './errors.ts';
 import * as svc from './service.ts';
 import { startAnalysis } from './analysis/run.ts';
+import { usageOf } from './analysis/usage.ts';
 import { MockAnalysisProvider } from './analysis/mock.ts';
 import type { AnalysisProvider } from './analysis/types.ts';
 import type { RequestDetail } from '../shared/types.ts';
@@ -12,6 +13,8 @@ export interface AppOptions {
   /** 분석 제공자. 없으면 모의 분석을 쓴다. */
   provider?: AnalysisProvider;
   analysisTimeoutMs?: number;
+  /** 테스트용: 사용량 집계에 쓰는 현재 시각 공급자 */
+  clock?: () => Date;
   /** 개발용 조절 엔드포인트(모의 분석의 지연·실패)를 켠다. 기본 꺼짐. */
   devControls?: boolean;
 }
@@ -42,9 +45,13 @@ export function createApp(db: Db, options: AppOptions = {}): Hono {
   const app = new Hono();
   const provider = options.provider ?? new MockAnalysisProvider();
   const timeoutMs = options.analysisTimeoutMs ?? 30000;
-  const providerInfo = { id: provider.id, label: provider.label, isMock: provider.isMock };
-  /** 요청 상세 응답에 분석 제공자 정보를 붙인다(화면이 "모의 분석 · 개발용"을 표시하는 데 쓴다). */
-  const withProvider = (d: RequestDetail): RequestDetail => ({ ...d, analysis: { ...d.analysis, provider: providerInfo } });
+  const providerInfo = { id: provider.id, label: provider.label, isMock: provider.isMock, sendsDataTo: provider.sendsDataTo ?? null };
+  const clock = options.clock;
+  /** 요청 상세 응답에 분석 제공자 정보와 AI 호출 사용량을 붙인다(화면이 모의 표시·전송 안내·남은 횟수에 쓴다). */
+  const withProvider = (d: RequestDetail): RequestDetail => ({
+    ...d,
+    analysis: { ...d.analysis, provider: providerInfo, usage: usageOf(db, provider, clock?.()) },
+  });
 
   // 비정상적으로 큰 본문은 읽기 전에 거부한다(필드별 길이 상한은 service 에서 별도로 검사).
   app.use(
@@ -114,6 +121,7 @@ export function createApp(db: Db, options: AppOptions = {}): Hono {
     const { run, done } = startAnalysis(db, provider, c.req.param('id'), {
       confirmReanalysis: b.confirmReanalysis === true,
       timeoutMs,
+      clock,
     });
     void done.catch(() => {});
     return c.json({ run }, 202);

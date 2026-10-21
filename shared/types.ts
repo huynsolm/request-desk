@@ -86,7 +86,7 @@ export interface RequestDetail {
     updatedAt: string;
   };
   items: AnalysisItem[];
-  analysis: { provider: ProviderInfo | null; latestRun: AnalysisRunSummary | null };
+  analysis: { provider: ProviderInfo | null; latestRun: AnalysisRunSummary | null; usage: UsageInfo | null };
   confirmations: Confirmation[]; // 최신순
   tasks: { id: string; title: string; status: TaskStatus; sourceChanged: boolean }[];
 }
@@ -95,6 +95,13 @@ export interface ProviderInfo {
   id: 'mock' | 'ai';
   label: string;
   isMock: boolean;
+  /** 요청 원문을 보내는 외부 서비스 이름(없으면 null). 화면에 전송 안내를 띄운다. */
+  sendsDataTo: string | null;
+}
+/** 실제 AI 호출 횟수 사용량(상한이 있는 제공자만). */
+export interface UsageInfo {
+  daily: { used: number; limit: number };
+  monthly: { used: number; limit: number };
 }
 export interface AnalysisRunSummary {
   id: string;
@@ -107,6 +114,9 @@ export interface AnalysisRunSummary {
   skippedCount: number | null; // 검증을 통과하지 못해 제외한 제안 수
   errorCode: string | null;
   errorMessage: string | null;
+  model: string | null; // 실제 AI 호출에 쓴 모델(모의는 null)
+  inputTokens: number | null;
+  outputTokens: number | null;
 }
 
 export interface ConfirmPreview {

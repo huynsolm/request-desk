@@ -2,7 +2,7 @@
 
 고객이 보낸 모호한 요청을 붙여 넣고 → 원문과 분석을 비교하며 → 요구사항·확인할 질문·미확정 사항으로 정리·검토 → 확정 → 작업으로 만들어 관리하는 **로컬 개발용** 웹앱입니다. 담당자 1명이 쓰는 것을 전제로 하며, 로그인이 없으므로 외부에 공개하지 마세요(서버는 `127.0.0.1` 에만 열립니다).
 
-현재 **1단계(AI 없는 핵심 기능)** 와 **2단계(모의 분석 제공자)** 가 구현되어 있습니다. 분석은 미리 정해 둔 **모의 결과(개발용)** 이며 실제 AI 연결(3단계)은 아직 없습니다.
+현재 **1단계(AI 없는 핵심 기능)**, **2단계(모의 분석 제공자)**, **3단계(실제 AI 연결: Anthropic Claude API)** 가 구현되어 있습니다. 기본값은 **모의 분석(개발용, 키 불필요)** 이고, 실제 AI 는 서버 `.env` 에 키를 넣고 켠 경우에만 동작합니다. 실제 Anthropic API 와의 연결은 아직 **미검증**입니다(아래 "실제 AI 켜기"의 스모크 확인 필요).
 
 > **다른 PC 에서 이어서 작업하려면** [docs/HANDOFF.md](docs/HANDOFF.md) 를 먼저 읽으세요. 1·2단계는 독립 검수를 통과해 `main` 에 병합되었습니다(`git clone -b main ...`).
 
@@ -35,16 +35,37 @@ npm run build && npm start   # http://127.0.0.1:3001 (dist/web 을 함께 서빙
 
 | 환경 변수 | 기본값 | 설명 |
 |---|---|---|
-| `ANALYSIS_PROVIDER` | `mock` | 분석 제공자. `ai` 는 3단계 전까지 거부됩니다 |
-| `ANALYSIS_TIMEOUT_MS` | `30000` | 분석 시간 초과 |
+| `ANALYSIS_PROVIDER` | `mock` | 분석 제공자: `mock`(모의) 또는 `ai`(Anthropic Claude) |
+| `ANALYSIS_TIMEOUT_MS` | mock 30000 / ai 120000 | 분석 시간 초과 |
 | `MOCK_ANALYSIS_DELAY_MS` | `1500` | 모의 분석이 걸리는 시간(분석 중 화면 확인용) |
 | `ENABLE_DEV_CONTROLS` | 꺼짐 | `1` 이면 테스트용 `/api/dev/mock-analysis`(지연·실패 조절)가 생깁니다. E2E 에서만 사용 |
+
+## 실제 AI 켜기 (3단계, Anthropic Claude API)
+**원문이 외부(Anthropic)로 전송**되고 호출마다 **비용이 발생**합니다. 기본값(모의)을 쓰면 아무것도 전송되지 않습니다.
+
+1. `.env.example` 을 복사해 프로젝트 루트에 `.env` 를 만들고 아래를 **직접** 채웁니다(키를 채팅·이슈·커밋에 붙여 넣지 마세요. `.env` 는 git 에서 제외됩니다).
+   ```
+   ANALYSIS_PROVIDER=ai
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+2. 연결 확인(호출 1회, 비용 발생): `npm run ai:smoke` — 키 값은 출력하지 않습니다.
+3. `npm run dev` 로 서버를 다시 시작하면 요청 상세에 전송 안내와 사용량(오늘 N/20 · 이번 달 N/300)이 표시됩니다.
+
+| 환경 변수 | 기본값 | 설명 |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | 없음 | 서버 전용 키. 브라우저·API 응답·로그에 나오지 않습니다 |
+| `ANTHROPIC_MODEL` | `claude-opus-5-5` | 더 싸게: `claude-sonnet-5-5`, `claude-haiku-5-5` |
+| `AI_DAILY_LIMIT` / `AI_MONTHLY_LIMIT` | `20` / `300` | 호출 횟수 상한(서버가 강제, 실패한 호출도 셈). 서버 PC의 현지 날짜·달 기준 |
+
+- 원문만 전송합니다(제목·고객명 제외). 결과는 항상 `AI 제안 · 검토 전`이며, 기존 항목은 수정·삭제하지 않습니다.
+- 비용은 모델·원문 길이에 따라 다릅니다. 매 실행의 모델·입출력 토큰이 DB(`analysis_runs`)에 기록되니 실제 비용은 거기서 확인하세요. 호출 횟수 상한만 있고 금액 상한은 없습니다.
 
 ## 테스트
 ```bash
 npm run typecheck
 npm test                  # 서버 규칙 + DB 방어선 (Vitest, 메모리/임시 DB)
 npm run test:e2e          # 브라우저 시나리오 (Playwright, 설치된 Chrome 사용, data/e2e.db 로 격리)
+npm run test:e2e:ai       # AI 연결 시나리오 (가짜 Anthropic 서버, 3198/5198/3299, data/e2e-ai.db). 실제 API 는 호출하지 않음
 ```
 
 ## 구조

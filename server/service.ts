@@ -244,7 +244,7 @@ export function getRequestDetail(db: Db, requestId: string): RequestDetail {
     .prepare('SELECT * FROM analysis_runs WHERE request_id = ? ORDER BY started_at DESC, rowid DESC LIMIT 1')
     .get(requestId) as Row | undefined;
   return {
-    analysis: { provider: null, latestRun: lastRun ? runFromRow(lastRun) : null }, // provider 는 app 이 채운다
+    analysis: { provider: null, latestRun: lastRun ? runFromRow(lastRun) : null, usage: null }, // provider 는 app 이 채운다
     request: {
       id: req.id,
       title: req.title,

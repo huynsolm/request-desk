@@ -14,5 +14,8 @@ export function runFromRow(r: Row): AnalysisRunSummary {
     skippedCount: r.skipped_count,
     errorCode: r.error_code,
     errorMessage: r.error_message,
+    model: r.model ?? null,
+    inputTokens: r.input_tokens ?? null,
+    outputTokens: r.output_tokens ?? null,
   };
 }
