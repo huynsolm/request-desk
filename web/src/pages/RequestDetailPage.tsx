@@ -342,7 +342,7 @@ export function RequestDetailPage() {
       toast(
         n > 0
           ? `${who}이 끝났어요. 제안 ${n}개를 ‘검토 전’으로 추가했어요.${skipped ? ` 근거가 맞지 않는 제안 ${skipped}개는 제외했어요.` : ''}`
-          : `${who}이 끝났어요. 새로 추가할 제안이 없었어요.${skipped ? ` (근거가 맞지 않는 제안 ${skipped}개 제외)` : ''}`,
+          : `${who}이 끝났어요. 새로 추가할 제안이 없었어요.${latestRun.reanalysis ? ' 이미 있거나 삭제한 제안은 다시 만들지 않아요.' : ''}${skipped ? ` (근거가 맞지 않는 제안 ${skipped}개 제외)` : ''}`,
       );
     } else if (hasItems) {
       toast(latestRun.errorMessage ?? '분석에 실패했어요.');

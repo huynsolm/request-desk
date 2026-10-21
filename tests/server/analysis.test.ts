@@ -341,3 +341,59 @@ describe('개발용 조절 장치', () => {
     expect(provider.controls).toEqual({ delayMs: 5, failNext: 2 });
   });
 });
+
+describe('2단계 검수 지적(31b439a): 재분석 판정과 중복 키', () => {
+  it('[R-ANALYZE-17] 재분석에서 모든 제안이 검증에 실패하면 성공으로 기록하지 않고 실패(invalid_response)로 닫는다', async () => {
+    const env = makeEnv(undefined, { provider: fake(async () => ({ requirements: [{ content: '결제 기능 추가', quote: '원문에 없는 문장' }], questions: [], undecided: [] })) });
+    const rid = await newRequest(env, { originalText: ORIGINAL });
+    await addManual(env, rid, 'question', '직접 적은 질문입니다');
+    const before = await items(env, rid);
+    await analyze(env, rid, true);
+    const run = await waitRun(env, rid);
+    expect([run.status, run.errorCode, run.skippedCount]).toEqual(['failed', 'invalid_response', null]);
+    expect(await items(env, rid)).toEqual(before);
+  });
+
+  it('[R-ANALYZE-17] 재분석에서 통과한 제안이 전부 이미 있는 것(중복)이면 새 제안 0개로 성공한다(검증 실패와 구분)', async () => {
+    const env = makeEnv(undefined, { provider: fake(async () => ({ requirements: [{ content: '예약 가능한 날짜 조회', quote: '가능한 날짜를 보고' }], questions: [], undecided: [] })) });
+    const rid = await newRequest(env, { originalText: ORIGINAL });
+    await analyze(env, rid);
+    await waitRun(env, rid);
+    await analyze(env, rid, true);
+    const run = await waitRun(env, rid);
+    expect([run.status, run.itemCount, run.skippedCount]).toEqual(['succeeded', 0, 0]);
+  });
+
+  it('[R-ANALYZE-18] 분석 항목을 전부 삭제한 뒤에도 재분석으로 판정하고(삭제한 제안은 되살리지 않음), 새 제안 0개는 실패가 아니라 성공이다', async () => {
+    const env = makeEnv();
+    const rid = await newRequest(env, { originalText: MORNING_ORIGINAL });
+    await analyze(env, rid);
+    await waitRun(env, rid);
+    for (const it of await items(env, rid)) await env.api('DELETE', `/api/items/${it.id}`, { version: it.version });
+    expect(await items(env, rid)).toHaveLength(0);
+    // 화면에 보이는 항목이 없으므로 확인창 없이 시작할 수 있지만, 분석 이력이 있으므로 재분석이다.
+    expect((await analyze(env, rid)).status).toBe(202);
+    const run = await waitRun(env, rid);
+    expect([run.status, run.reanalysis, run.itemCount]).toEqual(['succeeded', true, 0]);
+    expect(await items(env, rid)).toHaveLength(0); // 삭제(거절)한 제안은 되살리지 않는다
+  });
+
+  it('[R-ANALYZE-19] 시각적으로 같은 내용(유니코드 NFC/NFD)은 같은 제안으로 보고 중복 저장하지 않는다', async () => {
+    const nfc = '카페 café 예약이 필요한가요?';
+    const nfd = nfc.normalize('NFD');
+    expect(nfd).not.toBe(nfc);
+    const env = makeEnv(undefined, { provider: fake(async () => ({ requirements: [], questions: [{ content: nfc }, { content: nfd }], undecided: [] })) });
+    const rid = await newRequest(env, { originalText: ORIGINAL });
+    await analyze(env, rid);
+    const run = await waitRun(env, rid);
+    expect([run.status, run.itemCount]).toEqual(['succeeded', 1]); // 한 응답 안의 NFC/NFD 중복
+    // 이미 있는 항목(NFC)과 같은 NFD 제안도 건너뛴다
+    const env2 = makeEnv(undefined, { provider: fake(async () => ({ requirements: [], questions: [{ content: nfd }], undecided: [] })) });
+    const rid2 = await newRequest(env2, { originalText: ORIGINAL });
+    await addManual(env2, rid2, 'question', nfc);
+    await analyze(env2, rid2, true);
+    const run2 = await waitRun(env2, rid2);
+    expect([run2.status, run2.itemCount]).toEqual(['succeeded', 0]);
+    expect(await items(env2, rid2)).toHaveLength(1);
+  });
+});

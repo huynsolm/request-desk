@@ -60,6 +60,9 @@ Codex 등 독립 검수자가 "요구사항 → 구현 → 검증"을 따라갈 
 | R-ANALYZE-13 | **모의 분석임을 화면에 명확히 표시**("모의 분석 · 개발용" 안내, 모든 제안은 `모의 제안`, `AI 제안`이라고 부르지 않음). 고정 응답을 실제 AI 처럼 보이게 하지 않는다 | `RequestDetailPage.tsx`(mock-banner), `itemLabel` | `analysis.test.ts` [R-ANALYZE-13], E2E-A1 |
 | R-ANALYZE-14 | 모의 분석의 지연·실패 조절 장치는 기본으로 꺼져 있고(제품 화면에 없음) E2E 서버에서만 켠다 | `ENABLE_DEV_CONTROLS`, `/api/dev/mock-analysis` | `analysis.test.ts` [R-ANALYZE-14] |
 | R-ANALYZE-15 | 분석 중에도 새로고침하면 진행 상태가 유지되고 끝나면 결과가 보인다(서버가 실행 상태를 기억) | `analysis_runs`, 폴링 | E2E-A2 |
+| R-ANALYZE-17 | 재분석에서 통과한 제안이 하나도 없는데 검증 실패가 있으면 성공이 아니라 실패(`invalid_response`)로 기록한다. 이미 있는 것과 같아 건너뛴 중복은 "통과한 제안"이라 성공(새 제안 0개)으로 구분한다 | `applyResult`(`valid`/`skipped`) | `analysis.test.ts` [R-ANALYZE-17] ×2 |
+| R-ANALYZE-18 | 재분석 여부는 삭제한 항목까지 포함한 분석 이력으로 판정한다(사용자 확인 필요 여부는 화면에 보이는 항목 수로 판정). 항목을 모두 지운 뒤 다시 분석해도 삭제한 제안은 되살리지 않고, 새 제안 0개는 실패가 아니라 성공 | `startAnalysis`(`existing`/`history`) | `analysis.test.ts` [R-ANALYZE-18] |
+| R-ANALYZE-19 | 중복 비교는 유니코드 NFC 로 정규화한다(시각적으로 같은 글자를 같은 제안으로 봄) | `norm()` | `analysis.test.ts` [R-ANALYZE-19] |
 | R-ANALYZE-16 | 좁은 화면(375px)에서 분석 전·중·후 화면이 잘리지 않는다 | `styles.css` | E2E-A7 |
 
 ## 범위 밖(다음 단계)

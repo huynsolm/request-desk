@@ -12,11 +12,19 @@
 - 분석 실행 기록(`analysis_runs`): 새로고침·재시작에도 상태 유지, 서버 재시작 시 중단된 실행은 실패로 정리, 시간 초과(기본 30초), 같은 요청에 동시 분석 1개(DB UNIQUE).
 - 상세 설계와 결정: [decisions.md](../decisions.md) "2단계 설계 결정". 요구사항 추적: [requirements.md](../requirements.md) R-ANALYZE-01~16.
 
+## 1차 검수(31b439a) 지적 반영
+| 번호 | 지적 | 수정 | 회귀 테스트 |
+|---|---|---|---|
+| P1 | 재분석에서 모든 제안이 검증에 실패해도 succeeded(새 제안 0개) | 통과한 제안(중복 포함)과 실패를 구분, 통과 0개 + 실패 있으면 `invalid_response` | R-ANALYZE-17 ×2(실패 / 중복만이면 성공 대조) |
+| P2 | 삭제된 항목만 남으면 재분석으로 인식 못 해 empty_result 실패 | 재분석 여부는 삭제 포함 이력으로, 확인 필요 여부는 보이는 항목으로 분리 | R-ANALYZE-18 |
+| P2 | NFC/NFD 가 다른 중복 키 | 중복 비교에 NFC 정규화 | R-ANALYZE-19 |
+세 문제는 수정 전 코드에서 테스트가 실패함을 먼저 확인한 뒤 고쳤다(대조 테스트 1개는 수정 전에도 통과, 의도대로). 검수의 나머지 판정(비파괴성·경쟁 조건, 신뢰 경계, 실행 수명, 화면, 개발용 엔드포인트)은 문제 없음.
+
 ## 변경 파일
 - DB: `server/db/migrations/0003_analysis_runs.sql`
 - 서버: `server/analysis/{types,mock-data,mock,registry,summary,run}.ts`(신규), `server/app.ts`(분석 라우트·개발용 조절·제공자 정보), `server/service.ts`(상세에 분석 정보, 확정 blocker), `server/config.ts`, `server/index.ts`, `server/errors.ts`, `server/db/seed.ts`(샘플 데이터 공용화)
 - 웹: `web/src/pages/RequestDetailPage.tsx`, `Dialogs.tsx`(재분석 확인창), `api.ts`, `styles.css`, `shared/types.ts`
-- 테스트: `tests/server/analysis.test.ts`(25), `tests/e2e/stage2-analysis.spec.ts`(7)
+- 테스트: `tests/server/analysis.test.ts`(29), `tests/e2e/stage2-analysis.spec.ts`(7)
 
 ## 실행
 ```bash
@@ -30,7 +38,7 @@ npm run dev                 # 요청 상세에서 '요청 분석하기'
 | 검증 | 명령 | 결과 |
 |---|---|---|
 | 타입 검사 | `npm run typecheck` | 오류 없음 |
-| 서버·DB 규칙 | `npm test` | **83개 통과** (기존 58 + 2단계 25) |
+| 서버·DB 규칙 | `npm test` | **87개 통과** (기존 58 + 2단계 29) |
 | 브라우저 E2E | `npm run test:e2e` | **38개 통과**, 연속 2회 (기존 31 + 2단계 7) |
 | 빌드 | `npm run build` | 성공 |
 | 화면 직접 확인 | 개발 서버(1440px) | 분석 전·분석 중·결과 화면 확인 |

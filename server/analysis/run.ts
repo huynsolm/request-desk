@@ -30,7 +30,8 @@ function markFailed(db: Db, runId: string, code: string, message: string) {
   ).run(code, message, now(), runId);
 }
 
-const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+// 중복 비교용 정규화: 공백 제거·소문자·유니코드 NFC. 시각적으로 같은 글자(예: é 와 e+결합 악센트, 한글 자모 분리형)를 같은 것으로 본다.
+const norm = (s: string) => s.normalize('NFC').replace(/\s+/g, '').toLowerCase();
 
 /**
  * 제공자의 응답(구조 검증을 통과한 값)을 항목으로 반영한다. 한 트랜잭션에서 항목 추가와 실행 기록 갱신을 함께 한다.
@@ -59,8 +60,10 @@ function applyResult(db: Db, provider: AnalysisProvider, runId: string, result: 
       if (e.quote) seen.add(`quote|${norm(e.quote)}`);
     }
     let inserted = 0;
-    let skipped = 0;
+    let skipped = 0; // 검증에 실패해 제외한 제안
+    let valid = 0; // 검증을 통과한 제안(이미 있는 것과 같아 건너뛴 중복 포함)
     const add = (kind: 'requirement' | 'question' | 'undecided', content: string, quote: string | null, note: string | null) => {
+      valid += 1;
       const key = `${kind}|${norm(content)}`;
       if (seen.has(key) || (quote && seen.has(`quote|${norm(quote)}`))) return; // 이미 있는 제안
       seen.add(key);
@@ -94,6 +97,11 @@ function applyResult(db: Db, provider: AnalysisProvider, runId: string, result: 
         }
         add(kind, content, null, note);
       }
+    }
+    // 통과한 제안이 하나도 없는데 검증 실패가 있으면, 첫 분석이든 재분석이든 "성공"으로 기록하지 않는다.
+    // (이미 있는 것과 같아 건너뛴 중복은 통과한 제안이므로 여기에 걸리지 않는다.)
+    if (valid === 0 && skipped > 0) {
+      return markFailed(db, runId, 'invalid_response', '분석 결과가 올바르지 않아 반영하지 않았어요.');
     }
     if (inserted === 0 && !run.reanalysis) {
       return markFailed(
@@ -175,9 +183,12 @@ export function startAnalysis(
     if (req.phase === 'confirmed') {
       throw new AppError(409, 'locked_confirmed', '확정된 요청이에요. 먼저 ‘다시 검토하기’로 새 검토 버전을 시작해 주세요.');
     }
+    // existing: 화면에 보이는(삭제되지 않은) 항목 수 → 사용자 확인이 필요한지 판단
+    // history: 삭제한 항목까지 포함한 전체 수 → 재분석(= 이미 분석한 적이 있다)인지 판단
     const existing = (db
       .prepare('SELECT count(*) AS n FROM analysis_items WHERE request_id = ? AND deleted_at IS NULL')
       .get(requestId) as Row).n as number;
+    const history = (db.prepare('SELECT count(*) AS n FROM analysis_items WHERE request_id = ?').get(requestId) as Row).n as number;
     if (existing > 0 && !opts.confirmReanalysis) {
       throw new AppError(
         409,
@@ -190,7 +201,7 @@ export function startAnalysis(
       db.prepare(
         `INSERT INTO analysis_runs (id, request_id, provider, status, original_rev, reanalysis, started_at)
          VALUES (?, ?, ?, 'running', ?, ?, ?)`,
-      ).run(id, requestId, provider.id, req.original_rev, existing > 0 ? 1 : 0, now());
+      ).run(id, requestId, provider.id, req.original_rev, history > 0 ? 1 : 0, now());
     } catch (e) {
       if (e instanceof Error && e.message.includes('UNIQUE constraint failed: analysis_runs.request_id')) {
         throw new AppError(409, 'analysis_running', '이미 분석이 진행 중이에요.');
