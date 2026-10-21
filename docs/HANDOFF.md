@@ -1,6 +1,6 @@
 # 인수인계 — 다른 PC에서 이어서 작업하기
 
-마지막 갱신: 2026-10-21 · `main` = 1단계(검수 통과 `a213429` + 문서) · 작업 브랜치 `stage-2-mock-analysis`(2단계, 검수 대기)
+마지막 갱신: 2026-10-21 · 검수 통과 커밋 `939aed1` · 브랜치 `main` (1·2단계 병합 완료)
 
 ## 1. 지금 어디까지 왔나
 
@@ -8,10 +8,10 @@
 |---|---|
 | 1단계(AI 없는 핵심 기능) | **구현 완료, 독립 검수 6차까지 통과** (병합 차단 문제 없음) |
 | `main` 병합 | **완료** — 2026-10-21, 검수받은 커밋 `a213429` 를 fast-forward 로 병합·push. 원격 `stage-1-review` 브랜치는 같은 커밋으로 남아 있음 |
-| 2단계(모의 분석 제공자) | **구현 완료, 독립 검수 대기** — 브랜치 `stage-2-mock-analysis`(아직 `main` 에 병합 안 함). 보고서 [reports/stage-2.md](reports/stage-2.md), 1차 검수 반영 완료, 재검수 프롬프트 [codex-rereview-stage2-lite-prompt.md](codex-rereview-stage2-lite-prompt.md) |
+| 2단계(모의 분석 제공자) | **구현 완료, 독립 검수 통과(1차 지적 3건 수정 후 재검수 통과), `main` 병합 완료** — 2026-10-21, 검수받은 커밋 `939aed1` 을 fast-forward 로 병합. 보고서 [reports/stage-2.md](reports/stage-2.md). 원격 `stage-2-mock-analysis` 브랜치는 같은 커밋으로 남아 있음 |
 | 3단계(실제 AI) | 미착수 — 제공자·인증·비용을 사용자와 확인한 뒤 별도 진행 |
 
-검증 상태: `main`(1단계) 서버·DB 58개, E2E 31개. `stage-2-mock-analysis` 는 서버·DB **87개**, E2E **38개**(연속 2회), 타입 검사·빌드 통과.
+검증 상태(`939aed1`): 서버·DB **87개**, E2E **38개**(연속 2회), 타입 검사·빌드 통과. 병합 전에 GitHub 에서 새로 clone 한 사본에서도 `npm ci` → DB 초기화 → 타입 검사 → 테스트 → 빌드 → E2E 가 모두 통과함을 확인했다.
 미검증: 기준 디자인과의 픽셀 단위 일치, 스크린 리더, Chrome 외 브라우저, 한글 IME 실입력. 자세한 내용은 [reports/stage-1.md](reports/stage-1.md).
 
 ## 2. 다른 PC에서 시작하기
@@ -20,7 +20,6 @@
 
 ```bash
 git clone -b main https://github.com/huynsolm/request-desk.git
-# 2단계 작업을 이어서 하려면: git switch stage-2-mock-analysis
 cd request-desk
 npm ci
 npm run db:reset                          # DB 만들기 + 샘플 3건
@@ -32,8 +31,8 @@ npm run dev                               # http://localhost:5173  (API 는 127.
 확인용 명령:
 ```bash
 npm run typecheck
-npm test            # 기대: main 58개 / stage-2-mock-analysis 87개
-npm run test:e2e    # 기대: main 31개 / stage-2-mock-analysis 38개 (약 3분, 포트 3199/5199, data/e2e.db 사용)
+npm test            # 기대: 87개 통과
+npm run test:e2e    # 기대: 38개 통과 (약 3분, 포트 3199/5199, data/e2e.db 사용)
 npm run build
 ```
 
@@ -49,9 +48,7 @@ npm run build
 
 ## 3. 이어서 할 일 (순서)
 
-1. **2단계 재검수 받기** — [codex-rereview-stage2-lite-prompt.md](codex-rereview-stage2-lite-prompt.md) 를 Codex 에 붙여 넣어 요청(범위를 2단계 변경분으로 좁힌 경량 프롬프트). 지적 사항은 코드·실행으로 재현해 확인한 뒤 수정하고, 수정 전 코드에서 회귀 테스트가 실패하는지도 확인한다(지금까지의 방식, [reviews/](reviews/README.md) 참조).
-2. **검수 통과 후, 사용자 승인을 받아** `stage-2-mock-analysis` 를 `main` 에 병합. 병합 전에 새로 clone 한 사본에서 `npm ci` → 타입 검사 → 테스트 → 빌드 → E2E 를 한 번 더 확인한다.
-3. **3단계: 실제 AI 연결** — **시작 전에 사용자와 확인할 것**: 제공자, 인증 방식, 사용 비용. API 키는 서버에서만 사용하고 절대 커밋하지 않는다. 구현은 이미 만들어 둔 `AnalysisProvider` 인터페이스를 구현하고 `server/analysis/registry.ts` 의 `ai` 자리에 연결하면 된다. 응답 구조·원문 근거 검증, 시간 초과, 오류 처리, 결과를 항상 검토 전 제안(`origin='ai'`)으로 저장하는 규칙은 2단계에서 이미 서버에 있다. 3단계에서 새로 필요한 것: 비용·호출 제한, 키 관리, 실제 응답의 품질 검증, `AI 제안` 라벨 표시.
+1. **3단계: 실제 AI 연결** — **아직 시작하지 않았다. 사용자가 시작을 지시하고, 시작 전에 아래 세 가지를 사용자와 확인한 뒤 진행한다**: 제공자, 인증 방식, 사용 비용. API 키는 서버에서만 사용하고 절대 커밋하지 않는다. 구현은 이미 만들어 둔 `AnalysisProvider` 인터페이스를 구현하고 `server/analysis/registry.ts` 의 `ai` 자리에 연결하면 된다. 응답 구조·원문 근거 검증, 시간 초과, 오류 처리, 결과를 항상 검토 전 제안(`origin='ai'`)으로 저장하는 규칙은 2단계에서 이미 서버에 있다. 3단계에서 새로 필요한 것: 비용·호출 제한, 키 관리, 실제 응답의 품질 검증, `AI 제안` 라벨 표시.
 
 ## 4. 작업 규칙 (사용자 지시, 계속 지킬 것)
 - 한 번에 모든 기능을 만들지 말고 **단계별로** 진행, 단계가 끝나면 실행 가능한 상태로 두고 완료/남은 범위를 보고
@@ -96,4 +93,4 @@ tests/e2e/                 flow.spec.ts(주요 흐름) · recovery.spec.ts(저�
 | 5차 | 39006ad | P1(재시도 중 되돌리기 유실), P2(테스트 고정 지연), 완료 조건 동시 편집(조건부 수용) | (이 커밋) |
 | 6차 | a213429 | **병합 차단 문제 없음** (P1·P2·삭제 항목 보존 수정됨, 완료 조건 동시 편집 수용 타당) | — (`main` 병합 완료) |
 | 2단계 1차 | 31b439a | P1(재분석 전부 검증 실패가 성공으로 기록), P2(삭제만 남은 재분석 판정), P2(NFC/NFD 중복) | (이 커밋) |
-| 2단계 2차 | — | **검수 대기** | — |
+| 2단계 2차 | 939aed1 | **병합 차단 문제 없음** (F1·F2·F3 수정됨, 회귀 테스트 유효) | — (`main` 병합 완료) |
