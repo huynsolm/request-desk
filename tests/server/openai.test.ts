@@ -246,6 +246,27 @@ describe('ChatGPT(OpenAI) 통신 방어 (검수 지적 반영)', () => {
     expect((await detail(env, rid)).items).toHaveLength(0);
   });
 
+  it('[R-OA-12] 오류 상태(401·403·429·503)를 받고 본문이 끊겨도 상태에 따른 안내를 유지한다', async () => {
+    const cases: [number, string][] = [
+      [401, 'auth'],
+      [403, 'auth'],
+      [429, 'rate_limited'],
+      [503, 'unavailable'],
+    ];
+    for (const [status, expected] of cases) {
+      respond = (_q, res) => {
+        res.writeHead(status, { 'content-type': 'application/json', 'content-length': '5000' });
+        res.write('{"error":{"message":"SERVER_BODY_SECRET');
+        setTimeout(() => res.socket?.destroy(), 20);
+      };
+      const env = aiEnv();
+      const { rid, run } = await runOnce(env);
+      expect(run!.status).toBe('failed');
+      expect(run!.errorCode).toBe(expected);
+      expect(JSON.stringify(await detail(env, rid))).not.toContain('SERVER_BODY_SECRET');
+    }
+  });
+
   it('[R-OA-11] 본문이 끝까지 왔는데 JSON 이 아니면 invalid_response 다', async () => {
     respond = (_q, res) => {
       res.writeHead(200, { 'content-type': 'application/json' });

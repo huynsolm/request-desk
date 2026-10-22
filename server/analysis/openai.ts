@@ -116,6 +116,8 @@ export class OpenAIAnalysisProvider implements AnalysisProvider {
       raw = await res.text();
     } catch (e) {
       if (opts.signal.aborted) throw e;
+      // 오류 상태(401·429·5xx 등)는 이미 알고 있으니, 본문이 끊겨도 상태에 따른 안내를 유지한다.
+      if (!res.ok) throw this.toProviderError(res.status, null);
       throw new ProviderError('network', 'AI 서비스에 연결하지 못했어요. 네트워크를 확인한 뒤 다시 시도해 주세요.');
     }
     let json: ChatCompletion | null = null;
