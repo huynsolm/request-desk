@@ -128,6 +128,16 @@ describe('ChatGPT(OpenAI) 분석 성공', () => {
     expect(lines[lines.length - 1]).toBe(lines[0]);
   });
 
+  it('[R-OA-02b] 시스템 프롬프트가 질문·미확정을 꼭 필요한 것만, 각 3개까지로 제한하도록 요청에 실려 간다', async () => {
+    respond = (_q, res) => sendJson(res, 200, completionJson(GOOD));
+    await runOnce(aiEnv());
+    const system = seen[0].body.messages[0].content as string;
+    expect(system).toContain('questions 는 최대 3개');
+    expect(system).toContain('undecided 는 최대 3개');
+    expect(system).toContain('꼭 물어봐야 하는 것만');
+    expect(system).toContain('일반적인 제작 체크리스트');
+  });
+
   it('[R-OA-03] 원문에 없는 근거의 요구사항은 서버 검증에서 제외된다', async () => {
     respond = (_q, res) =>
       sendJson(res, 200, completionJson({ ...GOOD, requirements: [...GOOD.requirements, { content: '결제 기능', quote: '결제를 연동한다' }] }));
