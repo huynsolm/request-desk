@@ -101,15 +101,26 @@ export class OpenAIAnalysisProvider implements AnalysisProvider {
           response_format: RESPONSE_FORMAT,
         }),
         signal: opts.signal,
+        // 리다이렉트는 따라가지 않는다: 허용한 주소(localhost 검사 포함) 밖으로 원문이 다시 전송되는 것을 막는다.
+        redirect: 'error',
       });
     } catch (e) {
       if (opts.signal.aborted) throw e; // 시간 초과/취소는 실행기가 판단한다
       throw new ProviderError('network', 'AI 서비스에 연결하지 못했어요. 네트워크를 확인한 뒤 다시 시도해 주세요.');
     }
 
+    // 본문을 끝까지 받는 것(통신)과 JSON 으로 해석하는 것(형식)을 구분한다.
+    // 받다가 끊기면 응답이 온전한지, 토큰을 썼는지 알 수 없으므로 통신 실패로 처리하고 사용량은 알리지 않는다.
+    let raw: string;
+    try {
+      raw = await res.text();
+    } catch (e) {
+      if (opts.signal.aborted) throw e;
+      throw new ProviderError('network', 'AI 서비스에 연결하지 못했어요. 네트워크를 확인한 뒤 다시 시도해 주세요.');
+    }
     let json: ChatCompletion | null = null;
     try {
-      json = (await res.json()) as ChatCompletion;
+      json = JSON.parse(raw) as ChatCompletion;
     } catch {
       /* 본문이 JSON 이 아님 */
     }

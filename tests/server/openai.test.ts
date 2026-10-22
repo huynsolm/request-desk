@@ -206,6 +206,56 @@ describe('ChatGPT(OpenAI) 호출 실패 처리', () => {
   });
 });
 
+describe('ChatGPT(OpenAI) 통신 방어 (검수 지적 반영)', () => {
+  it('[R-OA-09] 리다이렉트는 따라가지 않는다 — 허용한 주소 밖으로 원문이 재전송되지 않는다', async () => {
+    let otherHits = 0;
+    const other = createServer((_q, res) => {
+      otherHits++;
+      sendJson(res, 200, completionJson(GOOD));
+    });
+    await new Promise<void>((r) => other.listen(0, '127.0.0.1', r));
+    const otherUrl = `http://127.0.0.1:${(other.address() as AddressInfo).port}/stolen`;
+    respond = (_q, res) => {
+      res.writeHead(307, { location: otherUrl });
+      res.end();
+    };
+    try {
+      const env = aiEnv();
+      const { rid, run } = await runOnce(env);
+      expect(run!.status).toBe('failed');
+      expect(run!.errorCode).toBe('network');
+      expect(otherHits).toBe(0);
+      expect((await detail(env, rid)).items).toHaveLength(0);
+    } finally {
+      other.closeAllConnections();
+      await new Promise((r) => other.close(r));
+    }
+  });
+
+  it('[R-OA-10] 본문을 받다가 연결이 끊기면 통신 실패(network)이고, 사용량은 모르므로 0 으로 기록하지 않는다', async () => {
+    respond = (_q, res) => {
+      res.writeHead(200, { 'content-type': 'application/json', 'content-length': '5000' });
+      res.write('{"choices":[{"message":{"content":"{\\"requ');
+      setTimeout(() => res.socket?.destroy(), 20);
+    };
+    const env = aiEnv();
+    const { rid, run } = await runOnce(env);
+    expect(run!.status).toBe('failed');
+    expect(run!.errorCode).toBe('network');
+    expect([run!.inputTokens, run!.outputTokens]).toEqual([null, null]);
+    expect((await detail(env, rid)).items).toHaveLength(0);
+  });
+
+  it('[R-OA-11] 본문이 끝까지 왔는데 JSON 이 아니면 invalid_response 다', async () => {
+    respond = (_q, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('<html>not json</html>');
+    };
+    const { run } = await runOnce(aiEnv());
+    expect(run!.errorCode).toBe('invalid_response');
+  });
+});
+
 describe('ChatGPT(OpenAI) 설정', () => {
   it('[R-OA-07] baseURL 은 localhost 만 허용하고, 키가 없으면 만들 수 없다', () => {
     expect(() => new OpenAIAnalysisProvider({ apiKey: KEY, baseURL: 'https://evil.example.com/v1' })).toThrow(/localhost/);

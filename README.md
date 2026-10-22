@@ -44,8 +44,8 @@ OPENAI_API_KEY=sk-...
 
 | 환경 변수 | 기본값 | 설명 |
 |---|---|---|
-| `ANALYSIS_PROVIDER` | `mock` | 분석 제공자: `mock`(모의) 또는 `ai`(Anthropic Claude) |
-| `ANALYSIS_TIMEOUT_MS` | mock 30000 / ai 120000 | 분석 시간 초과 |
+| `ANALYSIS_PROVIDER` | `mock` | 분석 제공자: `mock`(모의) / `ai`(Anthropic Claude) / `openai`(ChatGPT) |
+| `ANALYSIS_TIMEOUT_MS` | mock 30000 / ai·openai 120000 | 분석 시간 초과 |
 | `MOCK_ANALYSIS_DELAY_MS` | `1500` | 모의 분석이 걸리는 시간(분석 중 화면 확인용) |
 | `ENABLE_DEV_CONTROLS` | 꺼짐 | `1` 이면 테스트용 `/api/dev/mock-analysis`(지연·실패 조절)가 생깁니다. E2E 에서만 사용 |
 
@@ -63,6 +63,8 @@ OPENAI_API_KEY=sk-...
 | 환경 변수 | 기본값 | 설명 |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | 없음 | 서버 전용 키. 브라우저·API 응답·로그에 나오지 않습니다 |
+| `OPENAI_API_KEY` | 없음 | `ANALYSIS_PROVIDER=openai` 일 때 서버 전용 키. 브라우저·API 응답·로그에 나오지 않습니다 |
+| `OPENAI_MODEL` | `gpt-5-mini` | 거부되면 계정에서 쓸 수 있는 모델 이름으로 바꿉니다 |
 | `ANTHROPIC_MODEL` | `claude-opus-5-5` | 더 싸게: `claude-sonnet-5-5`, `claude-haiku-5-5` |
 | `AI_DAILY_LIMIT` / `AI_MONTHLY_LIMIT` | `20` / `300` | 호출 횟수 상한(서버가 강제, 실패한 호출도 셈). 서버 PC의 현지 날짜·달 기준 |
 
