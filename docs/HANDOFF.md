@@ -9,7 +9,7 @@
 | 1단계(AI 없는 핵심 기능) | **구현 완료, 독립 검수 6차까지 통과** (병합 차단 문제 없음) |
 | `main` 병합 | **완료** — 2026-10-21, 검수받은 커밋 `a213429` 를 fast-forward 로 병합·push. 원격 `stage-1-review` 브랜치는 같은 커밋으로 남아 있음 |
 | 2단계(모의 분석 제공자) | **구현 완료, 독립 검수 통과(1차 지적 3건 수정 후 재검수 통과), `main` 병합 완료** — 2026-10-21, 검수받은 커밋 `939aed1` 을 fast-forward 로 병합. 보고서 [reports/stage-2.md](reports/stage-2.md). 원격 `stage-2-mock-analysis` 브랜치는 같은 커밋으로 남아 있음 |
-| 3단계(실제 AI) | **구현 완료, 독립 검수 통과(P2 3건+문구 2건 수정 후 재검수 통과), `main` 병합 완료** — 검수받은 커밋 `9e99d6f`(fast-forward). Anthropic Claude API · 서버 `.env` 키 · 하루 20회/한 달 300회. 보고서 [reports/stage-3.md](reports/stage-3.md). **실제 API 통신은 미검증**(키 필요 → `npm run ai:smoke`) |
+| 3단계(실제 AI) | **구현 완료, 독립 검수 통과(P2 3건+문구 2건 수정 후 재검수 통과), `main` 병합 완료** — 검수받은 커밋 `9e99d6f`(fast-forward). Anthropic Claude API · 서버 `.env` 키 · 하루 20회/한 달 300회. 보고서 [reports/stage-3.md](reports/stage-3.md). **Anthropic 실제 API 통신은 미검증**(키 필요 → `npm run ai:smoke`). OpenAI(ChatGPT) 제공자는 `openai-provider` 브랜치에서 추가, 실제 스모크 1회 성공(2026-10-22, `gpt-5-mini`; 요구사항 3·질문 9·미확정 5, 원문에 없는 인용 0). 아직 독립 검수·`main` 병합 전 |
 
 검증 상태(`939aed1`): 서버·DB **87개**, E2E **38개**(연속 2회), 타입 검사·빌드 통과. 병합 전에 GitHub 에서 새로 clone 한 사본에서도 `npm ci` → DB 초기화 → 타입 검사 → 테스트 → 빌드 → E2E 가 모두 통과함을 확인했다.
 미검증: 기준 디자인과의 픽셀 단위 일치, 스크린 리더, Chrome 외 브라우저, 한글 IME 실입력. 자세한 내용은 [reports/stage-1.md](reports/stage-1.md).
