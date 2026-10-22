@@ -33,6 +33,15 @@ npm run build && npm start   # http://127.0.0.1:3001 (dist/web 을 함께 서빙
 ## 분석(2단계: 모의 분석)
 요청 상세에서 `요청 분석하기`를 누르면 **모의 분석**이 원문을 요구사항·확인할 질문·미확정 사항으로 나눠 제안합니다. 실제 AI 가 아니라 고정된 샘플 결과이고, 화면에 "모의 분석 · 개발용"으로 표시됩니다. 제안은 모두 `모의 제안 · 검토 전`으로 들어가며 사람이 검토해야 확정됩니다.
 
+### ChatGPT(OpenAI) 로 켜기
+Anthropic 대신 OpenAI API 를 쓰려면 `.env` 에 아래를 **직접** 채웁니다(키는 [OpenAI 플랫폼](https://platform.openai.com/api-keys)에서 만들고, 사용 전 크레딧 충전이 필요할 수 있어요). 나머지(전송 안내·사용량 상한·검토 전 제안 저장)는 동일합니다.
+```
+ANALYSIS_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+# OPENAI_MODEL=gpt-5-mini     # 기본값. 거부되면 계정에서 쓸 수 있는 모델 이름으로 바꾸세요
+```
+`npm run ai:smoke` 는 `ANALYSIS_PROVIDER` 에 맞춰 같은 방식으로 확인합니다. 실제 OpenAI API 와의 연결은 **미검증**입니다(가짜 서버로만 테스트).
+
 | 환경 변수 | 기본값 | 설명 |
 |---|---|---|
 | `ANALYSIS_PROVIDER` | `mock` | 분석 제공자: `mock`(모의) 또는 `ai`(Anthropic Claude) |
